@@ -1,273 +1,812 @@
 package com.example.data.repository
 
 import com.example.data.model.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import java.text.SimpleDateFormat
-import java.util.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
-class AdminRepository private constructor() {
+class AdminRepository(
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+) {
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
-    private fun getCurrentTimestamp(): String = dateFormat.format(Date())
-
-    // Active Admin Session
-    private val _currentAdmin = MutableStateFlow(
-        AdminUser(
-            id = "admin-session-active",
-            email = "admin@livewallpaper.internal",
-            name = "Administrator",
-            role = AdminRole.SUPER_ADMIN,
-            isActive = true,
-            lastLoginAt = getCurrentTimestamp()
-        )
-    )
-    val currentAdmin: StateFlow<AdminUser> = _currentAdmin.asStateFlow()
-
-    // Platform Metrics (Computed strictly from real authoritative records)
-    private val _metrics = MutableStateFlow(PlatformMetrics())
-    val metrics: StateFlow<PlatformMetrics> = _metrics.asStateFlow()
-
-    // Categories
-    private val _categories = MutableStateFlow<List<Category>>(emptyList())
-    val categories: StateFlow<List<Category>> = _categories.asStateFlow()
-
-    // Tags
-    private val _tags = MutableStateFlow<List<Tag>>(emptyList())
-    val tags: StateFlow<List<Tag>> = _tags.asStateFlow()
-
-    // Wallpapers
-    private val _wallpapers = MutableStateFlow<List<Wallpaper>>(emptyList())
-    val wallpapers: StateFlow<List<Wallpaper>> = _wallpapers.asStateFlow()
-
-    // Users
-    private val _users = MutableStateFlow<List<User>>(emptyList())
-    val users: StateFlow<List<User>> = _users.asStateFlow()
-
-    // Google Play Events
-    private val _googlePlayEvents = MutableStateFlow<List<GooglePlayEvent>>(emptyList())
-    val googlePlayEvents: StateFlow<List<GooglePlayEvent>> = _googlePlayEvents.asStateFlow()
-
-    // Rewarded Ad Events
-    private val _rewardAdEvents = MutableStateFlow<List<RewardAdEvent>>(emptyList())
-    val rewardAdEvents: StateFlow<List<RewardAdEvent>> = _rewardAdEvents.asStateFlow()
-
-    // Moderation Reports
-    private val _reports = MutableStateFlow<List<ModerationReport>>(emptyList())
-    val reports: StateFlow<List<ModerationReport>> = _reports.asStateFlow()
-
-    // Media Assets (R2)
-    private val _mediaAssets = MutableStateFlow<List<MediaAsset>>(emptyList())
-    val mediaAssets: StateFlow<List<MediaAsset>> = _mediaAssets.asStateFlow()
-
-    // App Configurations
-    private val _appConfig = MutableStateFlow(AppConfig())
-    val appConfig: StateFlow<AppConfig> = _appConfig.asStateFlow()
-
-    // Announcements
-    private val _announcements = MutableStateFlow<List<Announcement>>(emptyList())
-    val announcements: StateFlow<List<Announcement>> = _announcements.asStateFlow()
-
-    // Admin Users
-    private val _adminUsers = MutableStateFlow<List<AdminUser>>(emptyList())
-    val adminUsers: StateFlow<List<AdminUser>> = _adminUsers.asStateFlow()
-
-    // Audit Logs
-    private val _auditLogs = MutableStateFlow<List<AdminAuditLog>>(emptyList())
-    val auditLogs: StateFlow<List<AdminAuditLog>> = _auditLogs.asStateFlow()
-
-    // Role Switching for Testing & UI Demonstration
-    fun switchActiveAdminRole(role: AdminRole) {
-        val current = _currentAdmin.value
-        _currentAdmin.value = current.copy(role = role)
-        logAudit("ROLE_SIMULATION_SWITCH", "ADMIN_ROLE", current.id, "Switched preview role to $role")
-    }
-
-    // Wallpaper CRUD
-    fun saveWallpaper(wallpaper: Wallpaper, isNew: Boolean = false) {
-        val list = _wallpapers.value.toMutableList()
-        val timestamp = getCurrentTimestamp()
-        if (isNew) {
-            val created = wallpaper.copy(
-                id = if (wallpaper.id.isNotBlank()) wallpaper.id else UUID.randomUUID().toString(),
-                createdAt = timestamp,
-                updatedAt = timestamp
+    // ==========================================
+    // AUDIT LOGS (Append-only)
+    // ==========================================
+    suspend fun logAudit(
+        adminUser: AdminUser,
+        action: String,
+        entity: String,
+        entityId: String,
+        details: String
+    ) {
+        try {
+            val logId = UUID.randomUUID().toString()
+            val logData = mapOf(
+                "id" to logId,
+                "adminUid" to adminUser.uid,
+                "adminEmail" to adminUser.email,
+                "role" to adminUser.role.name,
+                "action" to action,
+                "entity" to entity,
+                "entityId" to entityId,
+                "details" to details,
+                "timestamp" to System.currentTimeMillis()
             )
-            list.add(0, created)
-            _wallpapers.value = list
-            logAudit("CREATE_WALLPAPER", "WALLPAPER", created.id, "Created '${created.title}' (${created.type}, ${created.accessType})")
-        } else {
-            val index = list.indexOfFirst { it.id == wallpaper.id }
-            if (index != -1) {
-                val updated = wallpaper.copy(updatedAt = timestamp)
-                list[index] = updated
-                _wallpapers.value = list
-                logAudit("UPDATE_WALLPAPER", "WALLPAPER", updated.id, "Updated fields for '${updated.title}'")
-            } else {
-                list.add(0, wallpaper)
-                _wallpapers.value = list
+            firestore.collection("admin_audit_logs").document(logId).set(logData).await()
+        } catch (_: Exception) {
+            // Fail gracefully without crashing the console
+        }
+    }
+
+    fun observeAuditLogs(): Flow<List<AuditLog>> = callbackFlow {
+        val listener = firestore.collection("admin_audit_logs")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(100)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    AuditLog(
+                        id = doc.getString("id") ?: doc.id,
+                        adminUid = doc.getString("adminUid") ?: "",
+                        adminEmail = doc.getString("adminEmail") ?: "",
+                        role = doc.getString("role") ?: "",
+                        action = doc.getString("action") ?: "",
+                        entity = doc.getString("entity") ?: "",
+                        entityId = doc.getString("entityId") ?: "",
+                        details = doc.getString("details") ?: "",
+                        timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
             }
-        }
-        updateMetrics()
+        awaitClose { listener.remove() }
     }
 
-    fun deleteWallpaper(wallpaperId: String, reason: String = "Admin deletion") {
-        val target = _wallpapers.value.find { it.id == wallpaperId }
-        _wallpapers.value = _wallpapers.value.filter { it.id != wallpaperId }
-        logAudit("DELETE_WALLPAPER", "WALLPAPER", wallpaperId, "Deleted '${target?.title ?: wallpaperId}'. Reason: $reason")
-        updateMetrics()
-    }
-
-    fun toggleWallpaperStatus(wallpaperId: String) {
-        val list = _wallpapers.value.map { wp ->
-            if (wp.id == wallpaperId) {
-                val newStatus = if (wp.status == ContentStatus.ACTIVE) ContentStatus.INACTIVE else ContentStatus.ACTIVE
-                logAudit("STATUS_CHANGE", "WALLPAPER", wp.id, "Changed status of '${wp.title}' to $newStatus")
-                wp.copy(status = newStatus, updatedAt = getCurrentTimestamp())
-            } else wp
-        }
-        _wallpapers.value = list
-        updateMetrics()
-    }
-
-    fun bulkUpdateStatus(ids: Set<String>, newStatus: ContentStatus) {
-        _wallpapers.value = _wallpapers.value.map { wp ->
-            if (ids.contains(wp.id)) wp.copy(status = newStatus, updatedAt = getCurrentTimestamp()) else wp
-        }
-        logAudit("BULK_STATUS_UPDATE", "WALLPAPERS", ids.joinToString(), "Bulk updated ${ids.size} wallpapers to $newStatus")
-        updateMetrics()
-    }
-
-    // Categories
-    fun saveCategory(category: Category, isNew: Boolean = false) {
-        val list = _categories.value.toMutableList()
-        if (isNew) {
-            list.add(category)
-            logAudit("CREATE_CATEGORY", "CATEGORY", category.id, "Created category '${category.name}'")
-        } else {
-            val index = list.indexOfFirst { it.id == category.id }
-            if (index != -1) {
-                list[index] = category
-                logAudit("UPDATE_CATEGORY", "CATEGORY", category.id, "Updated category '${category.name}'")
+    // ==========================================
+    // WALLPAPERS CRUD
+    // ==========================================
+    fun observeWallpapers(): Flow<List<Wallpaper>> = callbackFlow {
+        val listener = firestore.collection("wallpapers")
+            .orderBy("updatedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    docToWallpaper(doc.id, doc.data)
+                } ?: emptyList()
+                trySend(list)
             }
-        }
-        _categories.value = list
+        awaitClose { listener.remove() }
     }
 
-    fun deleteCategory(categoryId: String): Boolean {
-        // Check if referenced
-        val count = _wallpapers.value.count { it.categoryId == categoryId }
-        if (count > 0) {
-            // Soft deactivate
-            _categories.value = _categories.value.map {
-                if (it.id == categoryId) it.copy(isActive = false) else it
+    suspend fun getWallpaperById(id: String): Wallpaper? {
+        val doc = firestore.collection("wallpapers").document(id).get().await()
+        if (!doc.exists()) return null
+        return docToWallpaper(doc.id, doc.data)
+    }
+
+    suspend fun saveWallpaper(wallpaper: Wallpaper, adminUser: AdminUser): Result<String> {
+        return try {
+            val id = wallpaper.id.ifBlank { UUID.randomUUID().toString() }
+            val now = System.currentTimeMillis()
+            val isNew = wallpaper.id.isBlank()
+
+            val map = mutableMapOf<String, Any?>(
+                "id" to id,
+                "title" to wallpaper.title.trim(),
+                "description" to wallpaper.description.trim(),
+                "contentType" to wallpaper.contentType.name,
+                "liveExperienceType" to wallpaper.liveExperienceType?.name,
+                "accessType" to wallpaper.accessType.name,
+                "status" to wallpaper.status.name,
+                "categoryId" to wallpaper.categoryId,
+                "tags" to wallpaper.tags,
+                "isFeatured" to wallpaper.isFeatured,
+                "isTrending" to wallpaper.isTrending,
+                "isNew" to wallpaper.isNew,
+                "sortOrder" to wallpaper.sortOrder,
+                "thumbnailUrl" to wallpaper.thumbnailUrl.trim(),
+                "previewUrl" to wallpaper.previewUrl.trim(),
+                "primaryMediaUrl" to wallpaper.primaryMediaUrl.trim(),
+                "hasAudio" to wallpaper.hasAudio,
+                "audioCodec" to wallpaper.audioCodec,
+                "durationMs" to wallpaper.durationMs,
+                "width" to wallpaper.width,
+                "height" to wallpaper.height,
+                "fps" to wallpaper.fps,
+                "fileSizeBytes" to wallpaper.fileSizeBytes,
+                "viewsCount" to wallpaper.viewsCount,
+                "appliesCount" to wallpaper.appliesCount,
+                "favoritesCount" to wallpaper.favoritesCount,
+                "advancedConfig" to wallpaper.advancedConfig.toMap(),
+                "updatedAt" to now,
+                "updatedBy" to adminUser.email
+            )
+
+            if (isNew) {
+                map["createdAt"] = now
+                map["createdBy"] = adminUser.email
             }
-            logAudit("DEACTIVATE_CATEGORY", "CATEGORY", categoryId, "Soft deactivated category (has $count linked wallpapers)")
-            return false
+
+            firestore.collection("wallpapers").document(id).set(map).await()
+
+            logAudit(
+                adminUser = adminUser,
+                action = if (isNew) "CREATE_WALLPAPER" else "UPDATE_WALLPAPER",
+                entity = "WALLPAPER",
+                entityId = id,
+                details = "${wallpaper.title} (${wallpaper.contentType.name}${wallpaper.liveExperienceType?.let { " - $it" } ?: ""})"
+            )
+
+            Result.success(id)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        _categories.value = _categories.value.filter { it.id != categoryId }
-        logAudit("DELETE_CATEGORY", "CATEGORY", categoryId, "Safely deleted unreferenced category")
-        return true
     }
 
-    // Media Assets
-    fun registerMediaAsset(asset: MediaAsset) {
-        val list = _mediaAssets.value.toMutableList()
-        list.add(0, asset)
-        _mediaAssets.value = list
-        logAudit("REGISTER_R2_MEDIA", "MEDIA", asset.id, "Registered ${asset.filename} (${asset.assetType})")
-    }
+    suspend fun updateWallpaperStatus(
+        id: String,
+        newStatus: WallpaperStatus,
+        adminUser: AdminUser
+    ): Result<Unit> {
+        return try {
+            firestore.collection("wallpapers").document(id).update(
+                mapOf(
+                    "status" to newStatus.name,
+                    "updatedAt" to System.currentTimeMillis(),
+                    "updatedBy" to adminUser.email
+                )
+            ).await()
 
-    fun deleteMediaAsset(assetId: String): Boolean {
-        val asset = _mediaAssets.value.find { it.id == assetId }
-        if (asset?.linkedWallpaperId != null) {
-            return false // Protected: linked to a wallpaper
+            logAudit(
+                adminUser = adminUser,
+                action = "SET_STATUS_${newStatus.name}",
+                entity = "WALLPAPER",
+                entityId = id,
+                details = "Status changed to ${newStatus.name}"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        _mediaAssets.value = _mediaAssets.value.filter { it.id != assetId }
-        logAudit("DELETE_R2_MEDIA", "MEDIA", assetId, "Removed unlinked asset ${asset?.r2ObjectKey}")
-        return true
     }
 
-    // Moderation
-    fun updateReportStatus(reportId: String, status: String, notes: String, actionTaken: String) {
-        _reports.value = _reports.value.map { rep ->
-            if (rep.id == reportId) {
-                rep.copy(status = status, moderatorNotes = notes, actionTaken = actionTaken)
-            } else rep
+    suspend fun deleteWallpaper(id: String, title: String, adminUser: AdminUser): Result<Unit> {
+        return try {
+            firestore.collection("wallpapers").document(id).delete().await()
+            logAudit(
+                adminUser = adminUser,
+                action = "DELETE_WALLPAPER",
+                entity = "WALLPAPER",
+                entityId = id,
+                details = "Deleted wallpaper: $title"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        logAudit("MODERATION_ACTION", "REPORT", reportId, "Updated report status to $status with action $actionTaken")
     }
 
-    // App Config
-    fun updateAppConfig(config: AppConfig) {
-        _appConfig.value = config
-        logAudit("UPDATE_CONFIG", "CONFIG", "APP_SETTINGS", "Updated remote app configuration")
-    }
-
-    // Announcements
-    fun saveAnnouncement(announcement: Announcement) {
-        val list = _announcements.value.toMutableList()
-        val index = list.indexOfFirst { it.id == announcement.id }
-        if (index != -1) {
-            list[index] = announcement
-        } else {
-            list.add(0, announcement)
-        }
-        _announcements.value = list
-        logAudit("SAVE_ANNOUNCEMENT", "ANNOUNCEMENT", announcement.id, "Saved '${announcement.title}'")
-    }
-
-    // Audit logger helper
-    private fun logAudit(action: String, targetType: String, targetId: String?, details: String) {
-        val newLog = AdminAuditLog(
-            adminEmail = _currentAdmin.value.email,
-            action = action,
-            targetType = targetType,
-            targetId = targetId,
-            details = details,
-            createdAt = getCurrentTimestamp()
+    @Suppress("UNCHECKED_CAST")
+    private fun docToWallpaper(id: String, data: Map<String, Any?>?): Wallpaper? {
+        if (data == null) return null
+        return Wallpaper(
+            id = id,
+            title = data["title"] as? String ?: "Untitled",
+            description = data["description"] as? String ?: "",
+            contentType = ContentType.fromString(data["contentType"] as? String),
+            liveExperienceType = LiveExperienceType.fromString(data["liveExperienceType"] as? String),
+            accessType = AccessType.fromString(data["accessType"] as? String),
+            status = WallpaperStatus.fromString(data["status"] as? String),
+            categoryId = data["categoryId"] as? String ?: "",
+            tags = (data["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+            isFeatured = data["isFeatured"] as? Boolean ?: false,
+            isTrending = data["isTrending"] as? Boolean ?: false,
+            isNew = data["isNew"] as? Boolean ?: false,
+            sortOrder = (data["sortOrder"] as? Number)?.toInt() ?: 0,
+            thumbnailUrl = data["thumbnailUrl"] as? String ?: "",
+            previewUrl = data["previewUrl"] as? String ?: "",
+            primaryMediaUrl = data["primaryMediaUrl"] as? String ?: "",
+            hasAudio = data["hasAudio"] as? Boolean ?: false,
+            audioCodec = data["audioCodec"] as? String,
+            durationMs = (data["durationMs"] as? Number)?.toLong(),
+            width = (data["width"] as? Number)?.toInt(),
+            height = (data["height"] as? Number)?.toInt(),
+            fps = (data["fps"] as? Number)?.toInt(),
+            fileSizeBytes = (data["fileSizeBytes"] as? Number)?.toLong(),
+            viewsCount = (data["viewsCount"] as? Number)?.toLong() ?: 0L,
+            appliesCount = (data["appliesCount"] as? Number)?.toLong() ?: 0L,
+            favoritesCount = (data["favoritesCount"] as? Number)?.toLong() ?: 0L,
+            advancedConfig = AdvancedConfig.fromMap(data["advancedConfig"] as? Map<String, Any?>),
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            createdBy = data["createdBy"] as? String ?: "",
+            updatedBy = data["updatedBy"] as? String ?: ""
         )
-        val list = _auditLogs.value.toMutableList()
-        list.add(0, newLog)
-        _auditLogs.value = list
     }
 
-    private fun updateMetrics() {
-        val wps = _wallpapers.value
-        val usrs = _users.value
-        val reps = _reports.value
-        val media = _mediaAssets.value
-        _metrics.value = PlatformMetrics(
-            totalUsers = usrs.size.toLong(),
-            newUsersToday = usrs.count { it.lastActiveAt.startsWith(getCurrentTimestamp().take(10)) }.toLong(),
-            activeSubscribers = usrs.count { it.isPremium }.toLong(),
-            totalWallpapers = wps.size.toLong(),
-            liveWallpapers = wps.count { it.type == WallpaperType.LIVE }.toLong(),
-            staticWallpapers = wps.count { it.type == WallpaperType.STATIC }.toLong(),
-            premiumWallpapers = wps.count { it.accessType == AccessType.PREMIUM }.toLong(),
-            freeWallpapers = wps.count { it.accessType == AccessType.FREE }.toLong(),
-            activeWallpapers = wps.count { it.status == ContentStatus.ACTIVE }.toLong(),
-            featuredWallpapers = wps.count { it.isFeatured }.toLong(),
-            trendingWallpapers = wps.count { it.isTrending }.toLong(),
-            newWallpapers = wps.count { it.isNew }.toLong(),
-            rewardCompletionsToday = _rewardAdEvents.value.size.toLong(),
-            totalMediaStorageBytes = media.sumOf { it.sizeBytes },
-            openReportsCount = reps.count { it.status == "OPEN" }.toLong()
-        )
-    }
-
-    companion object {
-        @Volatile
-        private var instance: AdminRepository? = null
-
-        fun getInstance(): AdminRepository {
-            return instance ?: synchronized(this) {
-                instance ?: AdminRepository().also { instance = it }
+    // ==========================================
+    // MEDIA LIBRARY (R2 URL Registry)
+    // ==========================================
+    fun observeMediaAssets(): Flow<List<MediaAsset>> = callbackFlow {
+        val listener = firestore.collection("media_assets")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    MediaAsset(
+                        id = doc.id,
+                        url = doc.getString("url") ?: "",
+                        title = doc.getString("title") ?: "",
+                        mimeType = doc.getString("mimeType") ?: "video/mp4",
+                        width = (doc.get("width") as? Number)?.toInt(),
+                        height = (doc.get("height") as? Number)?.toInt(),
+                        durationMs = (doc.get("durationMs") as? Number)?.toLong(),
+                        fps = (doc.get("fps") as? Number)?.toInt(),
+                        hasAudio = doc.getBoolean("hasAudio") ?: false,
+                        audioCodec = doc.getString("audioCodec"),
+                        fileSizeBytes = (doc.get("fileSizeBytes") as? Number)?.toLong(),
+                        sha256 = doc.getString("sha256"),
+                        linkedWallpaperId = doc.getString("linkedWallpaperId"),
+                        slot = doc.getString("slot"),
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
             }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun saveMediaAsset(asset: MediaAsset, adminUser: AdminUser): Result<String> {
+        return try {
+            val id = asset.id.ifBlank { UUID.randomUUID().toString() }
+            val map = mapOf(
+                "id" to id,
+                "url" to asset.url.trim(),
+                "title" to asset.title.trim(),
+                "mimeType" to asset.mimeType,
+                "width" to asset.width,
+                "height" to asset.height,
+                "durationMs" to asset.durationMs,
+                "fps" to asset.fps,
+                "hasAudio" to asset.hasAudio,
+                "audioCodec" to asset.audioCodec,
+                "fileSizeBytes" to asset.fileSizeBytes,
+                "sha256" to asset.sha256,
+                "linkedWallpaperId" to asset.linkedWallpaperId,
+                "slot" to asset.slot,
+                "createdAt" to asset.createdAt
+            )
+            firestore.collection("media_assets").document(id).set(map).await()
+            logAudit(
+                adminUser = adminUser,
+                action = "REGISTER_MEDIA_URL",
+                entity = "MEDIA_ASSET",
+                entityId = id,
+                details = "${asset.title} (${asset.url})"
+            )
+            Result.success(id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteMediaAsset(id: String, url: String, adminUser: AdminUser): Result<Unit> {
+        return try {
+            firestore.collection("media_assets").document(id).delete().await()
+            logAudit(
+                adminUser = adminUser,
+                action = "REMOVE_MEDIA_REGISTRY",
+                entity = "MEDIA_ASSET",
+                entityId = id,
+                details = "Removed registry reference: $url"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // CATEGORIES & TAGS
+    // ==========================================
+    fun observeCategories(): Flow<List<Category>> = callbackFlow {
+        val listener = firestore.collection("categories")
+            .orderBy("sortOrder", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    Category(
+                        id = doc.id,
+                        name = doc.getString("name") ?: "",
+                        slug = doc.getString("slug") ?: "",
+                        description = doc.getString("description") ?: "",
+                        iconUrl = doc.getString("iconUrl") ?: "",
+                        sortOrder = (doc.get("sortOrder") as? Number)?.toInt() ?: 0,
+                        isActive = doc.getBoolean("isActive") ?: true,
+                        wallpapersCount = (doc.get("wallpapersCount") as? Number)?.toInt() ?: 0,
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun saveCategory(category: Category, adminUser: AdminUser): Result<String> {
+        return try {
+            val id = category.id.ifBlank { UUID.randomUUID().toString() }
+            val map = mapOf(
+                "id" to id,
+                "name" to category.name.trim(),
+                "slug" to category.slug.trim(),
+                "description" to category.description.trim(),
+                "iconUrl" to category.iconUrl.trim(),
+                "sortOrder" to category.sortOrder,
+                "isActive" to category.isActive,
+                "wallpapersCount" to category.wallpapersCount,
+                "createdAt" to category.createdAt
+            )
+            firestore.collection("categories").document(id).set(map).await()
+            logAudit(
+                adminUser = adminUser,
+                action = if (category.id.isBlank()) "CREATE_CATEGORY" else "UPDATE_CATEGORY",
+                entity = "CATEGORY",
+                entityId = id,
+                details = category.name
+            )
+            Result.success(id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteCategory(id: String, name: String, adminUser: AdminUser): Result<Unit> {
+        return try {
+            firestore.collection("categories").document(id).delete().await()
+            logAudit(
+                adminUser = adminUser,
+                action = "DELETE_CATEGORY",
+                entity = "CATEGORY",
+                entityId = id,
+                details = "Deleted: $name"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeTags(): Flow<List<Tag>> = callbackFlow {
+        val listener = firestore.collection("tags")
+            .orderBy("name", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    Tag(
+                        id = doc.id,
+                        name = doc.getString("name") ?: "",
+                        slug = doc.getString("slug") ?: "",
+                        usageCount = (doc.get("usageCount") as? Number)?.toInt() ?: 0,
+                        isActive = doc.getBoolean("isActive") ?: true
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun saveTag(tag: Tag, adminUser: AdminUser): Result<String> {
+        return try {
+            val id = tag.id.ifBlank { UUID.randomUUID().toString() }
+            val map = mapOf(
+                "id" to id,
+                "name" to tag.name.trim(),
+                "slug" to tag.slug.trim(),
+                "usageCount" to tag.usageCount,
+                "isActive" to tag.isActive
+            )
+            firestore.collection("tags").document(id).set(map).await()
+            logAudit(
+                adminUser = adminUser,
+                action = if (tag.id.isBlank()) "CREATE_TAG" else "UPDATE_TAG",
+                entity = "TAG",
+                entityId = id,
+                details = tag.name
+            )
+            Result.success(id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteTag(id: String, name: String, adminUser: AdminUser): Result<Unit> {
+        return try {
+            firestore.collection("tags").document(id).delete().await()
+            logAudit(
+                adminUser = adminUser,
+                action = "DELETE_TAG",
+                entity = "TAG",
+                entityId = id,
+                details = "Deleted tag: $name"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // USERS (View & Status Moderation)
+    // ==========================================
+    fun observeUsers(): Flow<List<UserProfile>> = callbackFlow {
+        val listener = firestore.collection("users")
+            .limit(200)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    UserProfile(
+                        uid = doc.id,
+                        email = doc.getString("email") ?: "",
+                        displayName = doc.getString("displayName") ?: "",
+                        subscriptionTier = SubscriptionTier.fromString(doc.getString("subscriptionTier")),
+                        subscriptionStatus = SubscriptionStatus.fromString(doc.getString("subscriptionStatus")),
+                        subscriptionExpiry = (doc.get("subscriptionExpiry") as? Number)?.toLong(),
+                        activeSku = doc.getString("activeSku"),
+                        currentAppliedWallpaperId = doc.getString("currentAppliedWallpaperId"),
+                        currentAppliedWallpaperTitle = doc.getString("currentAppliedWallpaperTitle"),
+                        isAppliedWallpaperPremium = doc.getBoolean("isAppliedWallpaperPremium") ?: false,
+                        appliedWallpaperSoundEnabled = doc.getBoolean("appliedWallpaperSoundEnabled") ?: false,
+                        accountStatus = AccountStatus.fromString(doc.getString("accountStatus")),
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        lastActiveAt = (doc.get("lastActiveAt") as? Number)?.toLong()
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun updateUserAccountStatus(
+        uid: String,
+        newStatus: AccountStatus,
+        adminUser: AdminUser
+    ): Result<Unit> {
+        return try {
+            firestore.collection("users").document(uid).update("accountStatus", newStatus.name).await()
+            logAudit(
+                adminUser = adminUser,
+                action = "SET_USER_STATUS_${newStatus.name}",
+                entity = "USER",
+                entityId = uid,
+                details = "User account status set to ${newStatus.name}"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // BILLING & ADMOB SSV (Read-only monitoring)
+    // ==========================================
+    fun observeBillingEvents(): Flow<List<BillingEvent>> = callbackFlow {
+        val listener = firestore.collection("billing_events")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(100)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    BillingEvent(
+                        id = doc.id,
+                        uid = doc.getString("uid") ?: "",
+                        sku = doc.getString("sku") ?: "",
+                        orderId = doc.getString("orderId") ?: "",
+                        purchaseToken = doc.getString("purchaseToken") ?: "",
+                        purchaseTime = (doc.get("purchaseTime") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        verificationState = VerificationState.fromString(doc.getString("verificationState")),
+                        amount = doc.getString("amount") ?: "",
+                        currency = doc.getString("currency") ?: "USD",
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun observeSSVEvents(): Flow<List<AdMobSSVEvent>> = callbackFlow {
+        val listener = firestore.collection("admob_ssv_events")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(100)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    AdMobSSVEvent(
+                        id = doc.id,
+                        uid = doc.getString("uid") ?: "",
+                        rewardType = doc.getString("rewardType") ?: "",
+                        rewardAmount = (doc.get("rewardAmount") as? Number)?.toInt() ?: 0,
+                        customData = doc.getString("customData"),
+                        verificationState = VerificationState.fromString(doc.getString("verificationState")),
+                        timestamp = (doc.get("timestamp") as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // ==========================================
+    // MODERATION
+    // ==========================================
+    fun observeModerationReports(): Flow<List<ModerationReport>> = callbackFlow {
+        val listener = firestore.collection("moderation_reports")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    ModerationReport(
+                        id = doc.id,
+                        reporterUid = doc.getString("reporterUid") ?: "",
+                        reporterEmail = doc.getString("reporterEmail"),
+                        targetType = doc.getString("targetType") ?: "WALLPAPER",
+                        targetId = doc.getString("targetId") ?: "",
+                        targetTitle = doc.getString("targetTitle"),
+                        reason = doc.getString("reason") ?: "",
+                        comments = doc.getString("comments") ?: "",
+                        status = ReportStatus.fromString(doc.getString("status")),
+                        reviewedBy = doc.getString("reviewedBy"),
+                        resolutionNotes = doc.getString("resolutionNotes"),
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        updatedAt = (doc.get("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun resolveReport(
+        reportId: String,
+        status: ReportStatus,
+        notes: String,
+        adminUser: AdminUser
+    ): Result<Unit> {
+        return try {
+            firestore.collection("moderation_reports").document(reportId).update(
+                mapOf(
+                    "status" to status.name,
+                    "reviewedBy" to adminUser.email,
+                    "resolutionNotes" to notes.trim(),
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            ).await()
+
+            logAudit(
+                adminUser = adminUser,
+                action = "MODERATION_${status.name}",
+                entity = "REPORT",
+                entityId = reportId,
+                details = "Report status set to ${status.name}. Notes: $notes"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // ANNOUNCEMENTS
+    // ==========================================
+    fun observeAnnouncements(): Flow<List<Announcement>> = callbackFlow {
+        val listener = firestore.collection("announcements")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    Announcement(
+                        id = doc.id,
+                        title = doc.getString("title") ?: "",
+                        message = doc.getString("message") ?: "",
+                        actionUrl = doc.getString("actionUrl"),
+                        targetAudience = TargetAudience.fromString(doc.getString("targetAudience")),
+                        isActive = doc.getBoolean("isActive") ?: true,
+                        startTime = (doc.get("startTime") as? Number)?.toLong(),
+                        expiryTime = (doc.get("expiryTime") as? Number)?.toLong(),
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        updatedAt = (doc.get("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun saveAnnouncement(announcement: Announcement, adminUser: AdminUser): Result<String> {
+        return try {
+            val id = announcement.id.ifBlank { UUID.randomUUID().toString() }
+            val map = mapOf(
+                "id" to id,
+                "title" to announcement.title.trim(),
+                "message" to announcement.message.trim(),
+                "actionUrl" to announcement.actionUrl?.trim(),
+                "targetAudience" to announcement.targetAudience.name,
+                "isActive" to announcement.isActive,
+                "startTime" to announcement.startTime,
+                "expiryTime" to announcement.expiryTime,
+                "createdAt" to announcement.createdAt,
+                "updatedAt" to System.currentTimeMillis()
+            )
+            firestore.collection("announcements").document(id).set(map).await()
+            logAudit(
+                adminUser = adminUser,
+                action = if (announcement.id.isBlank()) "CREATE_ANNOUNCEMENT" else "UPDATE_ANNOUNCEMENT",
+                entity = "ANNOUNCEMENT",
+                entityId = id,
+                details = announcement.title
+            )
+            Result.success(id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteAnnouncement(id: String, title: String, adminUser: AdminUser): Result<Unit> {
+        return try {
+            firestore.collection("announcements").document(id).delete().await()
+            logAudit(
+                adminUser = adminUser,
+                action = "DELETE_ANNOUNCEMENT",
+                entity = "ANNOUNCEMENT",
+                entityId = id,
+                details = "Deleted: $title"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // APP CONFIGURATION
+    // ==========================================
+    fun observeAppConfig(): Flow<AppConfig> = callbackFlow {
+        val listener = firestore.collection("app_configuration").document("global")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    trySend(AppConfig())
+                    return@addSnapshotListener
+                }
+                val config = AppConfig(
+                    maintenanceMode = snapshot.getBoolean("maintenanceMode") ?: false,
+                    maintenanceMessage = snapshot.getString("maintenanceMessage") ?: "System maintenance in progress.",
+                    minSupportedVersionCode = (snapshot.get("minSupportedVersionCode") as? Number)?.toInt() ?: 1,
+                    latestVersionCode = (snapshot.get("latestVersionCode") as? Number)?.toInt() ?: 1,
+                    interstitialAdIntervalMinutes = (snapshot.get("interstitialAdIntervalMinutes") as? Number)?.toInt() ?: 15,
+                    rewardedAdDailyLimit = (snapshot.get("rewardedAdDailyLimit") as? Number)?.toInt() ?: 10,
+                    enableTransitionWallpapers = snapshot.getBoolean("enableTransitionWallpapers") ?: true,
+                    enableChargingExperience = snapshot.getBoolean("enableChargingExperience") ?: true,
+                    updatedAt = (snapshot.get("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                    updatedBy = snapshot.getString("updatedBy") ?: "system"
+                )
+                trySend(config)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun saveAppConfig(config: AppConfig, adminUser: AdminUser): Result<Unit> {
+        return try {
+            val map = mapOf(
+                "maintenanceMode" to config.maintenanceMode,
+                "maintenanceMessage" to config.maintenanceMessage.trim(),
+                "minSupportedVersionCode" to config.minSupportedVersionCode,
+                "latestVersionCode" to config.latestVersionCode,
+                "interstitialAdIntervalMinutes" to config.interstitialAdIntervalMinutes,
+                "rewardedAdDailyLimit" to config.rewardedAdDailyLimit,
+                "enableTransitionWallpapers" to config.enableTransitionWallpapers,
+                "enableChargingExperience" to config.enableChargingExperience,
+                "updatedAt" to System.currentTimeMillis(),
+                "updatedBy" to adminUser.email
+            )
+            firestore.collection("app_configuration").document("global").set(map).await()
+            logAudit(
+                adminUser = adminUser,
+                action = "UPDATE_APP_CONFIG",
+                entity = "APP_CONFIG",
+                entityId = "global",
+                details = "Maintenance: ${config.maintenanceMode}, MinVer: ${config.minSupportedVersionCode}, LatestVer: ${config.latestVersionCode}"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // ADMIN USERS MANAGEMENT (Super Admin only)
+    // ==========================================
+    fun observeAdminUsers(): Flow<List<AdminUser>> = callbackFlow {
+        val listener = firestore.collection("admin_users")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    AdminUser(
+                        uid = doc.id,
+                        email = doc.getString("email") ?: "",
+                        displayName = doc.getString("displayName") ?: "",
+                        role = AdminRole.fromString(doc.getString("role")),
+                        isActive = doc.getBoolean("isActive") ?: true,
+                        createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        updatedAt = (doc.get("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        createdBy = doc.getString("createdBy") ?: "system"
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun saveAdminUser(targetUser: AdminUser, actor: AdminUser): Result<Unit> {
+        return try {
+            val map = mapOf(
+                "uid" to targetUser.uid,
+                "email" to targetUser.email.trim(),
+                "displayName" to targetUser.displayName.trim(),
+                "role" to targetUser.role.name,
+                "isActive" to targetUser.isActive,
+                "createdAt" to targetUser.createdAt,
+                "updatedAt" to System.currentTimeMillis(),
+                "createdBy" to targetUser.createdBy.ifBlank { actor.email }
+            )
+            firestore.collection("admin_users").document(targetUser.uid).set(map).await()
+            logAudit(
+                adminUser = actor,
+                action = "SET_ADMIN_ROLE_${targetUser.role.name}",
+                entity = "ADMIN_USER",
+                entityId = targetUser.uid,
+                details = "Updated ${targetUser.email} to ${targetUser.role.name} (Active: ${targetUser.isActive})"
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

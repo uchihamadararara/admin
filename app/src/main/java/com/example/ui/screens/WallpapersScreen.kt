@@ -2,9 +2,9 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,386 +21,401 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.*
-import com.example.data.repository.AdminRepository
 import com.example.ui.components.*
 import com.example.ui.theme.*
+import com.example.viewmodel.AdminViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WallpapersScreen(
-    repository: AdminRepository,
-    onCreateWallpaper: () -> Unit,
-    onEditWallpaper: (Wallpaper) -> Unit,
-    onPreviewWallpaper: (Wallpaper) -> Unit
+    viewModel: AdminViewModel,
+    modifier: Modifier = Modifier
 ) {
-    val wallpapers by repository.wallpapers.collectAsState()
-    val currentAdmin by repository.currentAdmin.collectAsState()
+    val wallpapers by viewModel.filteredWallpapers.collectAsState()
+    val rawWallpapers by viewModel.wallpapers.collectAsState()
+    val searchQuery by viewModel.wallpaperSearch.collectAsState()
+    val filterStatus by viewModel.filterStatus.collectAsState()
+    val filterAccess by viewModel.filterAccess.collectAsState()
+    val filterContentType by viewModel.filterContentType.collectAsState()
+    val filterExperienceType by viewModel.filterExperienceType.collectAsState()
 
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("ALL") }
-    var selectedIds by remember { mutableStateOf(setOf<String>()) }
-    var showDeleteConfirmDialog by remember { mutableStateOf<Wallpaper?>(null) }
-
-    val canEdit = currentAdmin.role in listOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.CONTENT_MANAGER)
-    val canDelete = currentAdmin.role in listOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN)
-
-    val filteredList = wallpapers.filter { wp ->
-        val matchesSearch = wp.title.contains(searchQuery, ignoreCase = true) ||
-                wp.category.contains(searchQuery, ignoreCase = true) ||
-                wp.tags.any { it.contains(searchQuery, ignoreCase = true) }
-
-        val matchesFilter = when (selectedFilter) {
-            "LIVE" -> wp.type == WallpaperType.LIVE
-            "STATIC" -> wp.type == WallpaperType.STATIC
-            "FREE" -> wp.accessType == AccessType.FREE
-            "PREMIUM" -> wp.accessType == AccessType.PREMIUM
-            "FEATURED" -> wp.isFeatured
-            "TRENDING" -> wp.isTrending
-            "NEW" -> wp.isNew
-            "SOUND" -> wp.soundAvailable
-            "CHARGING" -> wp.chargingAnimationAvailable
-            "INACTIVE" -> wp.status != ContentStatus.ACTIVE
-            else -> true
-        }
-        matchesSearch && matchesFilter
-    }
+    var wallpaperToDelete by remember { mutableStateOf<Wallpaper?>(null) }
+    var filterMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
+            .background(AmoledBackground)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Action Bar
+        // Top Action & Search Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "WALLPAPER LIBRARY",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${filteredList.size} of ${wallpapers.size} total items",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (canEdit) {
-                Button(
-                    onClick = onCreateWallpaper,
-                    shape = RoundedCornerShape(6.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ChampagneGold, contentColor = ObsidianCanvas)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Create Wallpaper", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                }
-            }
-        }
-
-        // Search Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Search by title, category, tags...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.wallpaperSearch.value = it },
+                placeholder = { Text("Search by title or tags...") },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary)
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(onClick = { viewModel.wallpaperSearch.value = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = null, tint = TextSecondary)
+                        }
                     }
-                }
-            },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = ChampagneGold,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = RoyalGold,
+                    unfocusedBorderColor = AmoledCardBorder,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                )
             )
-        )
 
-        // Filter Pills
-        val filterOptions = listOf(
-            "ALL" to "All",
-            "LIVE" to "Live Wallpapers",
-            "STATIC" to "Static",
-            "PREMIUM" to "Premium",
-            "FREE" to "Free",
-            "FEATURED" to "Featured",
-            "TRENDING" to "Trending",
-            "NEW" to "New",
-            "SOUND" to "With Audio",
-            "CHARGING" to "Charging FX",
-            "INACTIVE" to "Inactive"
-        )
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(filterOptions) { (key, label) ->
-                FilterChip(
-                    selected = selectedFilter == key,
-                    onClick = { selectedFilter = key },
-                    label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = ChampagneGold,
-                        selectedLabelColor = ObsidianCanvas,
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        labelColor = MaterialTheme.colorScheme.onSurface
+            if (viewModel.canManageWallpapers()) {
+                Button(
+                    onClick = { viewModel.startCreateWallpaper() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RoyalGold,
+                        contentColor = AmoledBackground
                     ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = selectedFilter == key,
-                        borderColor = MaterialTheme.colorScheme.outline,
-                        selectedBorderColor = ChampagneGold
-                    )
-                )
-            }
-        }
-
-        // Bulk Action Bar if items selected
-        if (selectedIds.isNotEmpty() && canEdit) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    Text(
-                        text = "${selectedIds.size} items selected",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = ChampagneGold
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                repository.bulkUpdateStatus(selectedIds, ContentStatus.ACTIVE)
-                                selectedIds = emptySet()
-                            },
-                            shape = RoundedCornerShape(4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusSuccessDark),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text("Activate", style = MaterialTheme.typography.labelSmall)
-                        }
-                        Button(
-                            onClick = {
-                                repository.bulkUpdateStatus(selectedIds, ContentStatus.INACTIVE)
-                                selectedIds = emptySet()
-                            },
-                            shape = RoundedCornerShape(4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusWarningDark),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text("Deactivate", style = MaterialTheme.typography.labelSmall)
-                        }
-                        TextButton(onClick = { selectedIds = emptySet() }) {
-                            Text("Deselect All", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("New", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
         }
 
-        // Wallpapers List
-        if (filteredList.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                EmptyStateCard(
-                    title = "No Wallpapers Found",
-                    description = if (searchQuery.isNotBlank() || selectedFilter != "ALL") "No wallpapers match your current search or filter criteria." else "Your wallpaper catalog is empty. Click 'Create Wallpaper' to publish your first wallpaper."
-                )
-            }
+        // Filter Pills Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status Filter Dropdown Pill
+            FilterPillButton(
+                label = filterStatus?.name ?: "Status: All",
+                isSelected = filterStatus != null,
+                onClick = {
+                    viewModel.filterStatus.value = when (filterStatus) {
+                        null -> WallpaperStatus.PUBLISHED
+                        WallpaperStatus.PUBLISHED -> WallpaperStatus.DRAFT
+                        WallpaperStatus.DRAFT -> WallpaperStatus.INACTIVE
+                        WallpaperStatus.INACTIVE -> WallpaperStatus.ARCHIVED
+                        WallpaperStatus.ARCHIVED -> null
+                    }
+                }
+            )
+
+            // Access Filter Pill
+            FilterPillButton(
+                label = filterAccess?.name ?: "Access: All",
+                isSelected = filterAccess != null,
+                onClick = {
+                    viewModel.filterAccess.value = when (filterAccess) {
+                        null -> AccessType.FREE
+                        AccessType.FREE -> AccessType.PREMIUM
+                        AccessType.PREMIUM -> null
+                    }
+                }
+            )
+
+            // Content Type Filter Pill
+            FilterPillButton(
+                label = filterContentType?.name ?: "Type: All",
+                isSelected = filterContentType != null,
+                onClick = {
+                    viewModel.filterContentType.value = when (filterContentType) {
+                        null -> ContentType.STATIC
+                        ContentType.STATIC -> ContentType.LIVE
+                        ContentType.LIVE -> null
+                    }
+                }
+            )
+
+            // Experience Type Filter Pill (if Live)
+            FilterPillButton(
+                label = filterExperienceType?.name ?: "Exp: All",
+                isSelected = filterExperienceType != null,
+                onClick = {
+                    viewModel.filterExperienceType.value = when (filterExperienceType) {
+                        null -> LiveExperienceType.NORMAL
+                        LiveExperienceType.NORMAL -> LiveExperienceType.TRANSITION
+                        LiveExperienceType.TRANSITION -> null
+                    }
+                }
+            )
+        }
+
+        // Wallpaper List / Empty States
+        if (rawWallpapers.isEmpty()) {
+            EmptyStateView(
+                icon = Icons.Default.Wallpaper,
+                title = "No Wallpapers Found",
+                description = "Your Firestore database currently has 0 wallpaper records. Create your first static or live wallpaper below.",
+                actionLabel = if (viewModel.canManageWallpapers()) "+ Create First Wallpaper" else null,
+                onAction = { viewModel.startCreateWallpaper() }
+            )
+        } else if (wallpapers.isEmpty()) {
+            EmptyStateView(
+                icon = Icons.Default.FilterListOff,
+                title = "No Matches for Selected Filters",
+                description = "Try resetting your search query or adjusting the status, access, and content type filters.",
+                actionLabel = "Reset All Filters",
+                onAction = {
+                    viewModel.wallpaperSearch.value = ""
+                    viewModel.filterStatus.value = null
+                    viewModel.filterAccess.value = null
+                    viewModel.filterContentType.value = null
+                    viewModel.filterExperienceType.value = null
+                }
+            )
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(filteredList, key = { it.id }) { wp ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = CardDefaults.outlinedCardBorder()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Checkbox for bulk actions
-                        if (canEdit) {
-                            Checkbox(
-                                checked = selectedIds.contains(wp.id),
-                                onCheckedChange = { checked ->
-                                    selectedIds = if (checked) selectedIds + wp.id else selectedIds - wp.id
-                                }
-                            )
-                        }
-
-                        // Thumbnail Box
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp, 84.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color.Black)
-                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-                        ) {
-                            AsyncImage(
-                                model = wp.thumbnailUrl,
-                                contentDescription = wp.title,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-
-                        // Metadata Details
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = wp.title,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                StatusBadge(
-                                    text = wp.type.name,
-                                    type = if (wp.type == WallpaperType.LIVE) StatusBadgeType.INFO else StatusBadgeType.NEUTRAL
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                StatusBadge(
-                                    text = wp.accessType.name,
-                                    type = if (wp.accessType == AccessType.PREMIUM) StatusBadgeType.GOLD else StatusBadgeType.SUCCESS
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Category: ${wp.category} · Priority: ${wp.sortOrder}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // Experience Badges
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (wp.soundAvailable) {
-                                    StatusBadge(text = "SOUND", type = StatusBadgeType.INFO)
-                                }
-                                if (wp.chargingAnimationAvailable) {
-                                    StatusBadge(text = "CHARGING FX", type = StatusBadgeType.GOLD)
-                                }
-                                if (wp.transitionAvailable) {
-                                    StatusBadge(text = "TRANSITION", type = StatusBadgeType.NEUTRAL)
-                                }
-                                if (wp.isFeatured) {
-                                    StatusBadge(text = "FEATURED", type = StatusBadgeType.SUCCESS)
-                                }
-                                if (wp.isTrending) {
-                                    StatusBadge(text = "TRENDING", type = StatusBadgeType.WARNING)
-                                }
-                                if (wp.isNew) {
-                                    StatusBadge(text = "NEW", type = StatusBadgeType.INFO)
-                                }
-                            }
-                        }
-
-                        // Action Buttons
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                IconButton(
-                                    onClick = { onPreviewWallpaper(wp) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = "Preview", tint = ChampagneGold)
-                                }
-
-                                if (canEdit) {
-                                    IconButton(
-                                        onClick = { onEditWallpaper(wp) },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurface)
-                                    }
-
-                                    IconButton(
-                                        onClick = { repository.toggleWallpaperStatus(wp.id) },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (wp.status == ContentStatus.ACTIVE) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = "Toggle Visibility",
-                                            tint = if (wp.status == ContentStatus.ACTIVE) StatusSuccessDark else StatusWarningDark
-                                        )
-                                    }
-                                }
-
-                                if (canDelete) {
-                                    IconButton(
-                                        onClick = { showDeleteConfirmDialog = wp },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = StatusDangerDark)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                items(wallpapers, key = { it.id }) { wp ->
+                    WallpaperAdminCard(
+                        wallpaper = wp,
+                        canEdit = viewModel.canManageWallpapers(),
+                        onEdit = { viewModel.startEditWallpaper(wp) },
+                        onTogglePublish = {
+                            val newStatus = if (wp.status == WallpaperStatus.PUBLISHED) WallpaperStatus.DRAFT else WallpaperStatus.PUBLISHED
+                            viewModel.setWallpaperStatus(wp.id, newStatus)
+                        },
+                        onArchive = { viewModel.setWallpaperStatus(wp.id, WallpaperStatus.ARCHIVED) },
+                        onDelete = { wallpaperToDelete = wp }
+                    )
                 }
             }
         }
+    }
+
+    // Delete Confirmation Dialog
+    wallpaperToDelete?.let { targetWp ->
+        DestructiveConfirmDialog(
+            title = "Delete Wallpaper?",
+            message = "Are you sure you want to delete '${targetWp.title}'? This will permanently remove the document from Cloud Firestore.",
+            confirmText = "Delete Permanently",
+            onConfirm = {
+                viewModel.deleteWallpaper(targetWp.id, targetWp.title)
+                wallpaperToDelete = null
+            },
+            onDismiss = { wallpaperToDelete = null }
+        )
     }
 }
 
-    // Delete Confirmation Dialog
-    showDeleteConfirmDialog?.let { wpToDelete ->
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmDialog = null },
-            title = { Text("Delete Wallpaper Permanently?") },
-            text = {
-                Text(
-                    "Are you sure you want to delete '${wpToDelete.title}' from the database?\n\n" +
-                            "Note: Users who already applied this wallpaper on their Android devices will keep their local persistent media. Server-side deletion will stop new downloads only."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        repository.deleteWallpaper(wpToDelete.id)
-                        showDeleteConfirmDialog = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusDangerDark)
-                ) {
-                    Text("Delete")
+@Composable
+private fun FilterPillButton(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isSelected) RoyalGoldContainer else AmoledSurfaceVariant)
+            .border(
+                1.dp,
+                if (isSelected) RoyalGold.copy(alpha = 0.6f) else AmoledCardBorder,
+                RoundedCornerShape(6.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) RoyalGoldText else TextSecondary
+        )
+    }
+}
+
+@Composable
+private fun WallpaperAdminCard(
+    wallpaper: Wallpaper,
+    canEdit: Boolean,
+    onEdit: () -> Unit,
+    onTogglePublish: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, AmoledCardBorder, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = AmoledSurface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Thumbnail
+            Box(
+                modifier = Modifier
+                    .size(width = 64.dp, height = 90.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF0F111A))
+                    .border(1.dp, AmoledCardBorder, RoundedCornerShape(8.dp))
+            ) {
+                val previewImg = wallpaper.thumbnailUrl.ifBlank {
+                    wallpaper.primaryMediaUrl.ifBlank {
+                        wallpaper.advancedConfig.homeUrl.ifBlank { wallpaper.previewUrl }
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = null }) {
-                    Text("Cancel")
+                if (previewImg.isNotBlank()) {
+                    AsyncImage(
+                        model = previewImg,
+                        contentDescription = wallpaper.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(24.dp)
+                    )
                 }
             }
-        )
+
+            // Info Column
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = wallpaper.title.ifBlank { "Untitled Wallpaper" },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+
+                // Pill row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AccessTypePill(type = wallpaper.accessType)
+                    ContentTypePill(type = wallpaper.contentType, experienceType = wallpaper.liveExperienceType)
+                    WallpaperStatusPill(status = wallpaper.status)
+                }
+
+                // Slots configured overview
+                val slotSummary = when {
+                    wallpaper.contentType == ContentType.STATIC -> "Primary Image Configured"
+                    wallpaper.liveExperienceType == LiveExperienceType.NORMAL -> {
+                        val chargingSlots = listOfNotNull(
+                            if (!wallpaper.advancedConfig.chargingEntryUrl.isNullOrBlank()) "Entry" else null,
+                            if (!wallpaper.advancedConfig.chargingLoopUrl.isNullOrBlank()) "Loop" else null,
+                            if (!wallpaper.advancedConfig.chargingReturnUrl.isNullOrBlank()) "Return" else null
+                        )
+                        if (chargingSlots.isEmpty()) "Normal Video (No charging media)"
+                        else "Normal Video + Charging (${chargingSlots.joinToString()})"
+                    }
+                    wallpaper.liveExperienceType == LiveExperienceType.TRANSITION -> {
+                        val configuredSlots = listOfNotNull(
+                            if (wallpaper.advancedConfig.homeUrl.isNotBlank()) "Home" else null,
+                            if (wallpaper.advancedConfig.lockUrl.isNotBlank()) "Lock" else null,
+                            if (!wallpaper.advancedConfig.homeToLockUrl.isNullOrBlank()) "H→L" else null,
+                            if (!wallpaper.advancedConfig.lockToHomeUrl.isNullOrBlank()) "L→H" else null,
+                            if (!wallpaper.advancedConfig.chargingLoopUrl.isNullOrBlank()) "Charge" else null
+                        )
+                        "Transition [${configuredSlots.joinToString()}]"
+                    }
+                    else -> "No slots configured"
+                }
+
+                Text(
+                    text = slotSummary,
+                    fontSize = 11.sp,
+                    color = TextMuted
+                )
+
+                // Audio & Metrics
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (wallpaper.hasAudio) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = RoyalGoldText, modifier = Modifier.size(12.dp))
+                            Text("Audio", fontSize = 10.sp, color = RoyalGoldText)
+                        }
+                    }
+                    Text(
+                        text = "${wallpaper.viewsCount} views • ${wallpaper.appliesCount} applies",
+                        fontSize = 10.sp,
+                        color = TextMuted
+                    )
+                }
+            }
+
+            // Actions Menu
+            if (canEdit) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    IconButton(
+                        onClick = onEdit,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = AmoledSurfaceVariant,
+                            contentColor = RoyalGold
+                        ),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(16.dp))
+                    }
+
+                    IconButton(
+                        onClick = onTogglePublish,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (wallpaper.status == WallpaperStatus.PUBLISHED) RoyalEmeraldContainer else AmoledSurfaceVariant,
+                            contentColor = if (wallpaper.status == WallpaperStatus.PUBLISHED) RoyalEmeraldText else TextSecondary
+                        ),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (wallpaper.status == WallpaperStatus.PUBLISHED) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle Publish",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = AmoledSurfaceVariant,
+                            contentColor = RoyalRose
+                        ),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
     }
 }

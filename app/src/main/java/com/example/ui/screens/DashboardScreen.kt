@@ -2,10 +2,12 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,288 +18,286 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.*
-import com.example.data.repository.AdminRepository
-import com.example.ui.components.*
+import com.example.ui.components.AccessTypePill
+import com.example.ui.components.ContentTypePill
+import com.example.ui.components.EmptyStateView
+import com.example.ui.components.WallpaperStatusPill
 import com.example.ui.theme.*
+import com.example.viewmodel.AdminScreen
+import com.example.viewmodel.AdminViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun DashboardScreen(
-    repository: AdminRepository,
-    onNavigateToWallpapers: () -> Unit,
-    onNavigateToSubscriptions: () -> Unit,
-    onNavigateToUsers: () -> Unit,
-    onNavigateToModeration: () -> Unit,
-    onNavigateToMedia: () -> Unit,
-    onPreviewWallpaper: (Wallpaper) -> Unit
+    viewModel: AdminViewModel,
+    modifier: Modifier = Modifier
 ) {
-    val metrics by repository.metrics.collectAsState()
-    val wallpapers by repository.wallpapers.collectAsState()
-    val auditLogs by repository.auditLogs.collectAsState()
-    val currentAdmin by repository.currentAdmin.collectAsState()
+    val wallpapers by viewModel.wallpapers.collectAsState()
+    val users by viewModel.users.collectAsState()
+    val mediaAssets by viewModel.mediaAssets.collectAsState()
+    val reports by viewModel.moderationReports.collectAsState()
+    val auditLogs by viewModel.auditLogs.collectAsState()
+    val currentAdmin = viewModel.currentAdmin()
 
-    LazyColumn(
-        modifier = Modifier
+    val totalWp = wallpapers.size
+    val publishedWp = wallpapers.count { it.status == WallpaperStatus.PUBLISHED }
+    val draftWp = wallpapers.count { it.status == WallpaperStatus.DRAFT }
+    val freeWp = wallpapers.count { it.accessType == AccessType.FREE }
+    val premiumWp = wallpapers.count { it.accessType == AccessType.PREMIUM }
+    val staticWp = wallpapers.count { it.contentType == ContentType.STATIC }
+    val normalLiveWp = wallpapers.count { it.contentType == ContentType.LIVE && it.liveExperienceType == LiveExperienceType.NORMAL }
+    val transitionLiveWp = wallpapers.count { it.contentType == ContentType.LIVE && it.liveExperienceType == LiveExperienceType.TRANSITION }
+
+    val totalUsers = users.size
+    val vipUsers = users.count { it.subscriptionTier == SubscriptionTier.VIP }
+    val openReports = reports.count { it.status == ReportStatus.OPEN }
+
+    Column(
+        modifier = modifier
             .fillMaxSize()
+            .background(GeoBackground)
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // Welcome Header & Current Role
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
+        // Welcome & Quick Action Banner
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, GeoCardBorder, RoundedCornerShape(24.dp)),
+            colors = CardDefaults.cardColors(containerColor = GeoSurface)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Royal Control Console",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Signed in as ${currentAdmin?.email ?: "Admin"} • Live Firestore sync",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+
+                if (viewModel.canManageWallpapers()) {
+                    Button(
+                        onClick = { viewModel.startCreateWallpaper() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GeoPrimary,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Create Wallpaper", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        // Key Metrics Grid
+        Text(
+            text = "SYSTEM METRICS (LIVE FIRESTORE DATA)",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextMuted,
+            letterSpacing = 0.8.sp
+        )
+
+        // Row 1 Metrics
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MetricCard(
+                title = "Total Wallpapers",
+                value = "$totalWp",
+                subtitle = "$publishedWp Published • $draftWp Draft",
+                icon = Icons.Default.Wallpaper,
+                containerColor = GeoTertiaryContainer,
+                iconBadgeBg = GeoDarkAccent,
+                iconColor = Color.White,
+                textColor = GeoOnTertiaryContainer,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.navigateTo(AdminScreen.WALLPAPERS) }
+            )
+            MetricCard(
+                title = "Registered Users",
+                value = "$totalUsers",
+                subtitle = if (totalUsers == 0) "No registered users yet" else "$vipUsers VIP subscribers",
+                icon = Icons.Default.People,
+                containerColor = GeoSecondaryContainer,
+                iconBadgeBg = GeoOnSecondaryContainer,
+                iconColor = Color.White,
+                textColor = GeoOnSecondaryContainer,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.navigateTo(AdminScreen.USERS) }
+            )
+        }
+
+        // Row 2 Metrics
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MetricCard(
+                title = "Media Assets",
+                value = "${mediaAssets.size}",
+                subtitle = "Cloudflare R2 Public References",
+                icon = Icons.Default.PermMedia,
+                containerColor = GeoPrimaryContainer,
+                iconBadgeBg = GeoOnPrimaryContainer,
+                iconColor = Color.White,
+                textColor = GeoOnPrimaryContainer,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.navigateTo(AdminScreen.MEDIA_LIBRARY) }
+            )
+            MetricCard(
+                title = "Moderation Queue",
+                value = "$openReports",
+                subtitle = if (openReports == 0) "All reports resolved" else "$openReports Open reports pending",
+                icon = Icons.Default.Report,
+                containerColor = if (openReports > 0) GeoRoseContainer else GeoSurfaceVariant,
+                iconBadgeBg = if (openReports > 0) GeoRose else GeoSecondary,
+                iconColor = Color.White,
+                textColor = if (openReports > 0) GeoRoseText else TextPrimary,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.navigateTo(AdminScreen.MODERATION) }
+            )
+        }
+
+        // Content Breakdown Cards
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, GeoCardBorder, RoundedCornerShape(24.dp)),
+            colors = CardDefaults.cardColors(containerColor = GeoSurface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "CATALOG DISTRIBUTION",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    letterSpacing = 0.8.sp
+                )
+
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    DistributionItem("Free Content", "$freeWp", GeoEmeraldText, GeoEmeraldContainer)
+                    DistributionItem("Premium (VIP)", "$premiumWp", GeoGoldText, GeoGoldContainer)
+                    DistributionItem("Static Image", "$staticWp", TextSecondary, GeoSurfaceVariant)
+                    DistributionItem("Normal Live", "$normalLiveWp", GeoOnSecondaryContainer, GeoSecondaryContainer)
+                    DistributionItem("Transition Live", "$transitionLiveWp", GeoOnPrimaryContainer, GeoPrimaryContainer)
+                }
+            }
+        }
+
+        // Recent Audit Activity Section
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "RECENT ADMINISTRATIVE AUDIT TRAIL",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    letterSpacing = 0.8.sp
+                )
+                TextButton(onClick = { viewModel.navigateTo(AdminScreen.AUDIT_LOGS) }) {
+                    Text("View Full Log →", color = GeoPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+
+            if (auditLogs.isEmpty()) {
+                EmptyStateView(
+                    icon = Icons.Default.History,
+                    title = "No Recent Activity",
+                    description = "Administrative actions (such as creating wallpapers, modifying categories, or updating configs) will be logged here."
+                )
+            } else {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .clip(RoundedCornerShape(24.dp))
+                        .border(1.dp, GeoCardBorder, RoundedCornerShape(24.dp)),
+                    colors = CardDefaults.cardColors(containerColor = GeoSurface)
                 ) {
-                    Column {
-                        Text(
-                            text = "PLATFORM CONTROL CENTER",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                letterSpacing = 1.2.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = ChampagneGold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Welcome, ${currentAdmin.name}",
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Live Wallpaper Platform Production Management Dashboard",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    AdminRolePill(role = currentAdmin.role)
-                }
-            }
-        }
-
-        // Top Metrics Grid
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard(
-                        title = "Total Wallpapers",
-                        value = "${metrics.totalWallpapers}",
-                        subtitle = "${metrics.liveWallpapers} Live · ${metrics.staticWallpapers} Static",
-                        icon = Icons.Default.Wallpaper,
-                        accentColor = ChampagneGold,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToWallpapers
-                    )
-                    MetricCard(
-                        title = "Active Subscribers",
-                        value = "${metrics.activeSubscribers}",
-                        subtitle = "Google Play Authoritative",
-                        icon = Icons.Default.Star,
-                        accentColor = StatusSuccessDark,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToSubscriptions
-                    )
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard(
-                        title = "Total Registered Users",
-                        value = "${metrics.totalUsers}",
-                        subtitle = "+${metrics.newUsersToday} new today",
-                        icon = Icons.Default.People,
-                        accentColor = StatusInfoDark,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToUsers
-                    )
-                    MetricCard(
-                        title = "Rewarded SSV Verified",
-                        value = "${metrics.rewardCompletionsToday}",
-                        subtitle = "Free tier applies today",
-                        icon = Icons.Default.CheckCircle,
-                        accentColor = ChampagneGoldLight,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        // Live Operational Health & Storage Status
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "SYSTEM INFRASTRUCTURE HEALTH",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        StatusBadge(text = "ALL SERVICES NOMINAL", type = StatusBadgeType.SUCCESS)
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        HealthPill("Supabase Postgres", "Online", StatusSuccessDark, Modifier.weight(1f))
-                        HealthPill("Cloudflare R2", "1.48 GB Active", ChampagneGold, Modifier.weight(1f))
-                        HealthPill("Google Play RTDN", "Subscribed", StatusInfoDark, Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-
-        // Featured & Top Performing Wallpapers
-        item {
-            SectionHeader(
-                title = "Top Performing Content",
-                subtitle = "Ranked by real on-device wallpaper applications",
-                actionButtonText = "View Library",
-                onActionClick = onNavigateToWallpapers
-            )
-        }
-
-        if (wallpapers.isEmpty()) {
-            item {
-                EmptyStateCard(
-                    title = "No Wallpapers Published",
-                    description = "Use the 'Upload Media' or 'New Live Wallpaper' action to add content to your library."
-                )
-            }
-        } else {
-            items(wallpapers.take(4)) { wallpaper ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = CardDefaults.outlinedCardBorder()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = wallpaper.title,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                StatusBadge(
-                                    text = wallpaper.type.name,
-                                    type = if (wallpaper.type == WallpaperType.LIVE) StatusBadgeType.INFO else StatusBadgeType.NEUTRAL
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                StatusBadge(
-                                    text = wallpaper.accessType.name,
-                                    type = if (wallpaper.accessType == AccessType.PREMIUM) StatusBadgeType.GOLD else StatusBadgeType.SUCCESS
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${wallpaper.appliesCount} applies · ${wallpaper.viewsCount} views · ${wallpaper.favoritesCount} favorites",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (wallpaper.soundAvailable) {
-                                    StatusBadge(text = "SOUND AVAILABLE", type = StatusBadgeType.INFO)
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        auditLogs.take(5).forEach { log ->
+                            val timeStr = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(log.timestamp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(GeoSurfaceVariant)
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = log.action,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GeoPrimary,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Text(
+                                            text = "• by ${log.adminEmail}",
+                                            fontSize = 11.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                    Text(
+                                        text = log.details,
+                                        fontSize = 12.sp,
+                                        color = TextPrimary
+                                    )
                                 }
-                                if (wallpaper.chargingAnimationAvailable) {
-                                    StatusBadge(text = "CHARGING FX", type = StatusBadgeType.GOLD)
-                                }
-                            }
-                        }
-
-                        Button(
-                            onClick = { onPreviewWallpaper(wallpaper) },
-                            shape = RoundedCornerShape(6.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Preview", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Recent Audit Log
-        item {
-            SectionHeader(
-                title = "Recent Administrative Activity",
-                subtitle = "Immutable audit log of all backend operations"
-            )
-        }
-
-        if (auditLogs.isEmpty()) {
-            item {
-                EmptyStateCard(
-                    title = "No Audit Logs",
-                    description = "Administrative actions will be automatically recorded in the immutable audit log."
-                )
-            }
-        } else {
-            items(auditLogs.take(5)) { log ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(6.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = CardDefaults.outlinedCardBorder()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                StatusBadge(text = log.action, type = StatusBadgeType.GOLD)
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = log.adminEmail,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = timeStr,
+                                    fontSize = 10.sp,
+                                    color = TextMuted
                                 )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = log.details,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
-                        Text(
-                            text = log.createdAt.substringAfter("T").substringBefore("Z"),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
@@ -306,17 +306,105 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun HealthPill(name: String, status: String, accent: Color, modifier: Modifier = Modifier) {
-    Box(
+private fun MetricCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    icon: ImageVector,
+    containerColor: Color,
+    iconBadgeBg: Color,
+    iconColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-            .padding(8.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
-        Column {
-            Text(text = name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = status, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = accent)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor.copy(alpha = 0.85f)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(iconBadgeBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = value,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                color = textColor
+            )
+
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = textColor.copy(alpha = 0.75f)
+            )
         }
     }
 }
+
+@Composable
+private fun DistributionItem(
+    label: String,
+    count: String,
+    countColor: Color,
+    containerColor: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(containerColor)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = count,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = countColor
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = TextSecondary,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+

@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,411 +14,629 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.*
-import com.example.data.repository.AdminRepository
-import com.example.ui.components.*
+import com.example.ui.components.VirtualPhoneSimulator
 import com.example.ui.theme.*
+import com.example.viewmodel.AdminScreen
+import com.example.viewmodel.AdminViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WallpaperEditorScreen(
-    repository: AdminRepository,
-    wallpaperToEdit: Wallpaper?,
-    onNavigateBack: () -> Unit
+    viewModel: AdminViewModel,
+    modifier: Modifier = Modifier
 ) {
-    val isNew = wallpaperToEdit == null
-    val categories by repository.categories.collectAsState()
+    val wallpaper by viewModel.editingWallpaper.collectAsState()
+    val simulatorState by viewModel.simulatorState.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+    var isSaving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
 
-    var title by remember { mutableStateOf(wallpaperToEdit?.title ?: "") }
-    var description by remember { mutableStateOf(wallpaperToEdit?.description ?: "") }
-    var type by remember { mutableStateOf(wallpaperToEdit?.type ?: WallpaperType.LIVE) }
-    var accessType by remember { mutableStateOf(wallpaperToEdit?.accessType ?: AccessType.FREE) }
-    var status by remember { mutableStateOf(wallpaperToEdit?.status ?: ContentStatus.ACTIVE) }
-    var selectedCategory by remember { mutableStateOf(wallpaperToEdit?.category ?: categories.firstOrNull()?.name ?: "Abstract") }
-    var tagsInput by remember { mutableStateOf(wallpaperToEdit?.tags?.joinToString(", ") ?: "4K Ultra, 60 FPS") }
-    var isFeatured by remember { mutableStateOf(wallpaperToEdit?.isFeatured ?: false) }
-    var isTrending by remember { mutableStateOf(wallpaperToEdit?.isTrending ?: false) }
-    var isNewItem by remember { mutableStateOf(wallpaperToEdit?.isNew ?: true) }
-    var sortOrder by remember { mutableIntStateOf(wallpaperToEdit?.sortOrder ?: 0) }
+    var tagsInput by remember(wallpaper.id) {
+        mutableStateOf(wallpaper.tags.joinToString(", "))
+    }
 
-    // Media URLs
-    var thumbnailUrl by remember { mutableStateOf(wallpaperToEdit?.thumbnailUrl ?: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=600") }
-    var mediaUrl by remember { mutableStateOf(wallpaperToEdit?.mediaUrl ?: "https://assets.mixkit.co/videos/preview/mixkit-nebula-in-deep-space-42603-large.mp4") }
-    var durationSeconds by remember { mutableFloatStateOf(wallpaperToEdit?.durationSeconds ?: 15.0f) }
-    var fps by remember { mutableIntStateOf(wallpaperToEdit?.fps ?: 60) }
-
-    // Sound metadata
-    var soundAvailable by remember { mutableStateOf(wallpaperToEdit?.soundAvailable ?: false) }
-    var audioVolume by remember { mutableFloatStateOf(wallpaperToEdit?.soundMetadata?.defaultVolume ?: 1.0f) }
-
-    // Charging Experience
-    var chargingAnimationAvailable by remember { mutableStateOf(wallpaperToEdit?.chargingAnimationAvailable ?: false) }
-    var chargingType by remember { mutableStateOf(wallpaperToEdit?.chargingAnimationType ?: "ENERGY_BEAM") }
-    var chargingAsset by remember { mutableStateOf(wallpaperToEdit?.chargingAnimationAsset ?: "media/charging/plasma_beam.mp4") }
-    var chargingDurationMs by remember { mutableIntStateOf(wallpaperToEdit?.chargingTransitionDurationMs ?: 300) }
-
-    // Transition Experience
-    var transitionAvailable by remember { mutableStateOf(wallpaperToEdit?.transitionAvailable ?: false) }
-    var transitionType by remember { mutableStateOf(wallpaperToEdit?.transitionType ?: "FADE") }
-    var transitionDurationMs by remember { mutableIntStateOf(wallpaperToEdit?.transitionDurationMs ?: 400) }
-
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val scrollState = rememberScrollState()
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (isNew) "Create New Wallpaper" else "Edit '${wallpaperToEdit?.title}'",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(AmoledBackground)
+    ) {
+        // Editor Action Header
+        Surface(
+            color = AmoledSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, AmoledCardBorder)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(
+                        onClick = { viewModel.navigateTo(AdminScreen.WALLPAPERS) },
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = TextPrimary)
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                },
-                actions = {
+                    Column {
+                        Text(
+                            text = if (wallpaper.id.isBlank()) "Create Wallpaper" else "Edit Wallpaper",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = if (wallpaper.id.isBlank()) "Draft Document" else "ID: ${wallpaper.id.take(12)}...",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            if (title.isBlank() || thumbnailUrl.isBlank() || mediaUrl.isBlank()) {
-                                errorMessage = "Title, Thumbnail URL, and Media URL are strictly required."
-                                return@Button
+                            isSaving = true
+                            saveError = null
+                            viewModel.saveEditingWallpaper { success, err ->
+                                isSaving = false
+                                if (!success) saveError = err
                             }
-
-                            val tagsList = tagsInput.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                            val categoryObj = categories.find { it.name == selectedCategory }
-
-                            val updatedWp = (wallpaperToEdit ?: Wallpaper(
-                                title = title,
-                                thumbnailUrl = thumbnailUrl,
-                                mediaUrl = mediaUrl
-                            )).copy(
-                                title = title,
-                                description = description,
-                                type = type,
-                                accessType = accessType,
-                                status = status,
-                                category = selectedCategory,
-                                categoryId = categoryObj?.id,
-                                tags = tagsList,
-                                isFeatured = isFeatured,
-                                isTrending = isTrending,
-                                isNew = isNewItem,
-                                sortOrder = sortOrder,
-                                thumbnailUrl = thumbnailUrl,
-                                mediaUrl = mediaUrl,
-                                durationSeconds = durationSeconds,
-                                fps = fps,
-                                soundAvailable = soundAvailable,
-                                soundMetadata = SoundMetadata(
-                                    hasAudioTrack = soundAvailable,
-                                    defaultVolume = audioVolume
-                                ),
-                                chargingAnimationAvailable = chargingAnimationAvailable,
-                                chargingAnimationType = chargingType,
-                                chargingAnimationAsset = if (chargingAnimationAvailable) chargingAsset else null,
-                                chargingTransitionDurationMs = chargingDurationMs,
-                                transitionAvailable = transitionAvailable,
-                                transitionType = transitionType,
-                                transitionDurationMs = transitionDurationMs
-                            )
-
-                            repository.saveWallpaper(updatedWp, isNew = isNew)
-                            onNavigateBack()
                         },
-                        shape = RoundedCornerShape(6.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ChampagneGold, contentColor = ObsidianCanvas)
+                        enabled = !isSaving,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RoyalGold,
+                            contentColor = AmoledBackground
+                        ),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isNew) "Publish Wallpaper" else "Save Changes", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                        if (isSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = AmoledBackground)
+                        } else {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save Wallpaper", fontWeight = FontWeight.Bold)
+                        }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
+                }
+            }
         }
-    ) { innerPadding ->
+
+        // Main Editor Content Body
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(scrollState),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            errorMessage?.let { msg ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = StatusDangerBgDark),
-                    border = CardDefaults.outlinedCardBorder()
+            // Save Error Banner
+            if (saveError != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RoyalRoseContainer)
+                        .border(1.dp, RoyalRose, RoundedCornerShape(8.dp))
+                        .padding(12.dp)
                 ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Error, contentDescription = null, tint = StatusDangerDark)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = msg, color = StatusDangerDark, style = MaterialTheme.typography.bodyMedium)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = RoyalRoseText)
+                        Text(saveError ?: "", color = RoyalRoseText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
 
-            // Basic Information Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("1. BASIC INFORMATION", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ChampagneGold)
+            // SECTION 1: BASIC INFORMATION
+            EditorSectionCard(title = "1. BASIC INFORMATION") {
+                OutlinedTextField(
+                    value = wallpaper.title,
+                    onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(title = it) } },
+                    label = { Text("Wallpaper Title *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = editorFieldColors(),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true
+                )
 
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("Title *") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                OutlinedTextField(
+                    value = wallpaper.description,
+                    onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(description = it) } },
+                    label = { Text("Description") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = editorFieldColors(),
+                    shape = RoundedCornerShape(8.dp),
+                    minLines = 2
+                )
+            }
+
+            // SECTION 2: ACCESS & EXPERIENCE CLASSIFICATION
+            EditorSectionCard(title = "2. ACCESS & EXPERIENCE TYPE") {
+                // Access Type Selector
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Access Tier", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AccessType.entries.forEach { access ->
+                            val selected = wallpaper.accessType == access
+                            OptionChoicePill(
+                                text = access.name,
+                                isSelected = selected,
+                                activeColor = if (access == AccessType.PREMIUM) RoyalGold else RoyalEmerald,
+                                onClick = { viewModel.updateEditingWallpaper { w -> w.copy(accessType = access) } }
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (wallpaper.accessType == AccessType.PREMIUM)
+                            "⭐ PREMIUM: Everyone can freely browse, view details & run simulator. Subscription required ONLY when applying to actual phone."
+                        else "✓ FREE: Everyone can preview and apply freely.",
+                        fontSize = 11.sp,
+                        color = if (wallpaper.accessType == AccessType.PREMIUM) RoyalGoldText else RoyalEmeraldText
                     )
+                }
 
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Description") },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 3
-                    )
+                HorizontalDivider(color = AmoledCardBorder)
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Type Selector
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Content Type", style = MaterialTheme.typography.labelMedium)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(
-                                    selected = type == WallpaperType.LIVE,
-                                    onClick = { type = WallpaperType.LIVE },
-                                    label = { Text("LIVE VIDEO") }
-                                )
-                                FilterChip(
-                                    selected = type == WallpaperType.STATIC,
-                                    onClick = { type = WallpaperType.STATIC },
-                                    label = { Text("STATIC IMAGE") }
+                // Content Type Selector
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Content Architecture", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ContentType.entries.forEach { type ->
+                            val selected = wallpaper.contentType == type
+                            OptionChoicePill(
+                                text = type.name,
+                                isSelected = selected,
+                                activeColor = RoyalIndigo,
+                                onClick = {
+                                    viewModel.updateEditingWallpaper { w ->
+                                        w.copy(
+                                            contentType = type,
+                                            liveExperienceType = if (type == ContentType.LIVE && w.liveExperienceType == null) LiveExperienceType.NORMAL else w.liveExperienceType
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // If Live: Experience Type
+                if (wallpaper.contentType == ContentType.LIVE) {
+                    HorizontalDivider(color = AmoledCardBorder)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Live Experience Type (Explicit Contract)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LiveExperienceType.entries.forEach { exp ->
+                                val selected = wallpaper.liveExperienceType == exp
+                                OptionChoicePill(
+                                    text = exp.name,
+                                    isSelected = selected,
+                                    activeColor = RoyalGold,
+                                    onClick = { viewModel.updateEditingWallpaper { w -> w.copy(liveExperienceType = exp) } }
                                 )
                             }
                         }
-
-                        // Access Tier
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Monetization Tier", style = MaterialTheme.typography.labelMedium)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(
-                                    selected = accessType == AccessType.FREE,
-                                    onClick = { accessType = AccessType.FREE },
-                                    label = { Text("FREE (Rewarded Ad)") }
-                                )
-                                FilterChip(
-                                    selected = accessType == AccessType.PREMIUM,
-                                    onClick = { accessType = AccessType.PREMIUM },
-                                    label = { Text("PREMIUM") }
-                                )
-                            }
-                        }
-                    }
-
-                    // Category & Tags
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = selectedCategory,
-                            onValueChange = { selectedCategory = it },
-                            label = { Text("Category") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
+                        Text(
+                            text = if (wallpaper.liveExperienceType == LiveExperienceType.NORMAL)
+                                "NORMAL: Single primary live video loop + optional charging media."
+                            else "TRANSITION: Multi-state explicit wallpaper with independent Home, Lock, Lock-to-Home, Charging transitions.",
+                            fontSize = 11.sp,
+                            color = TextSecondary
                         )
-                        OutlinedTextField(
-                            value = tagsInput,
-                            onValueChange = { tagsInput = it },
-                            label = { Text("Tags (comma-separated)") },
-                            modifier = Modifier.weight(1.5f),
-                            singleLine = true
-                        )
-                    }
-
-                    // Discovery Flags
-                    Text("Discovery Flags", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = isFeatured, onCheckedChange = { isFeatured = it })
-                            Text("Featured", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = isTrending, onCheckedChange = { isTrending = it })
-                            Text("Trending", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = isNewItem, onCheckedChange = { isNewItem = it })
-                            Text("New", style = MaterialTheme.typography.bodyMedium)
-                        }
                     }
                 }
             }
 
-            // Cloudflare R2 Media Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("2. CLOUDFLARE R2 MEDIA ASSETS", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ChampagneGold)
+            // SECTION 3: MEDIA ASSET SLOTS
+            EditorSectionCard(title = "3. MEDIA SLOTS (CLOUDFLARE R2 PUBLIC HTTPS URLS)") {
+                // Thumbnail URL (Common)
+                OutlinedTextField(
+                    value = wallpaper.thumbnailUrl,
+                    onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(thumbnailUrl = it) } },
+                    label = { Text("Thumbnail Preview Image URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = editorFieldColors(),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true
+                )
 
+                when {
+                    wallpaper.contentType == ContentType.STATIC -> {
+                        OutlinedTextField(
+                            value = wallpaper.primaryMediaUrl,
+                            onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(primaryMediaUrl = it) } },
+                            label = { Text("Primary Static Image URL *") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+                    }
+
+                    wallpaper.liveExperienceType == LiveExperienceType.NORMAL -> {
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.primaryUrl,
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(
+                                        primaryMediaUrl = url,
+                                        advancedConfig = w.advancedConfig.copy(primaryUrl = url)
+                                    )
+                                }
+                            },
+                            label = { Text("Primary Live Video URL * (Mandatory)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        Text("Optional Charging Experience Media:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = RoyalGold)
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.chargingEntryUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(chargingEntryUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("Charging Entry Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.chargingLoopUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(chargingLoopUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("Charging Loop Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.chargingReturnUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(chargingReturnUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("Charging Return Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+                    }
+
+                    wallpaper.liveExperienceType == LiveExperienceType.TRANSITION -> {
+                        Text("Transition Live Multi-State Slots:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = RoyalGold)
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.homeUrl,
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(
+                                        primaryMediaUrl = url,
+                                        advancedConfig = w.advancedConfig.copy(homeUrl = url)
+                                    )
+                                }
+                            },
+                            label = { Text("HOME State Video URL * (Mandatory)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.lockUrl,
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(lockUrl = url))
+                                }
+                            },
+                            label = { Text("LOCK State Video URL * (Mandatory)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.homeToLockUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(homeToLockUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("HOME → LOCK Transition Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.lockToHomeUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(lockToHomeUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("LOCK → HOME Transition Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.homeToChargingUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(homeToChargingUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("HOME → CHARGING Transition Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.lockToChargingUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(lockToChargingUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("LOCK → CHARGING Transition Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.chargingLoopUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(chargingLoopUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("CHARGING LOOP Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = wallpaper.advancedConfig.chargingReturnUrl ?: "",
+                            onValueChange = { url ->
+                                viewModel.updateEditingWallpaper { w ->
+                                    w.copy(advancedConfig = w.advancedConfig.copy(chargingReturnUrl = url.ifBlank { null }))
+                                }
+                            },
+                            label = { Text("CHARGING RETURN Video URL (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = editorFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+                    }
+                }
+            }
+
+            // SECTION 4: METADATA & AUDIO
+            EditorSectionCard(title = "4. METADATA & AUDIO SPECIFICATION") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Media Audio Available", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text("If audio is present, Android app prompts user Sound ON/OFF during Apply.", fontSize = 11.sp, color = TextSecondary)
+                    }
+                    Switch(
+                        checked = wallpaper.hasAudio,
+                        onCheckedChange = { viewModel.updateEditingWallpaper { w -> w.copy(hasAudio = it) } },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = RoyalGold,
+                            checkedTrackColor = RoyalGoldContainer
+                        )
+                    )
+                }
+
+                if (wallpaper.hasAudio) {
                     OutlinedTextField(
-                        value = mediaUrl,
-                        onValueChange = { mediaUrl = it },
-                        label = { Text("Media Asset URL / R2 Key *") },
+                        value = wallpaper.audioCodec ?: "",
+                        onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(audioCodec = it.ifBlank { null }) } },
+                        label = { Text("Audio Codec (e.g. aac, opus)") },
                         modifier = Modifier.fillMaxWidth(),
+                        colors = editorFieldColors(),
+                        shape = RoundedCornerShape(8.dp),
                         singleLine = true
                     )
+                }
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     OutlinedTextField(
-                        value = thumbnailUrl,
-                        onValueChange = { thumbnailUrl = it },
-                        label = { Text("Thumbnail URL *") },
-                        modifier = Modifier.fillMaxWidth(),
+                        value = wallpaper.fps?.toString() ?: "",
+                        onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(fps = it.toIntOrNull()) } },
+                        label = { Text("FPS (e.g. 60)") },
+                        modifier = Modifier.weight(1f),
+                        colors = editorFieldColors(),
+                        shape = RoundedCornerShape(8.dp),
                         singleLine = true
                     )
+                    OutlinedTextField(
+                        value = wallpaper.durationMs?.toString() ?: "",
+                        onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(durationMs = it.toLongOrNull()) } },
+                        label = { Text("Duration (ms)") },
+                        modifier = Modifier.weight(1f),
+                        colors = editorFieldColors(),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true
+                    )
+                }
+            }
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = "$fps",
-                            onValueChange = { fps = it.toIntOrNull() ?: 60 },
-                            label = { Text("Frame Rate (FPS)") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = "$durationSeconds",
-                            onValueChange = { durationSeconds = it.toFloatOrNull() ?: 15f },
-                            label = { Text("Duration (Sec)") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
+            // SECTION 5: TAXONOMY & STATUS
+            EditorSectionCard(title = "5. TAXONOMY & PUBLISH STATUS") {
+                // Category selection
+                OutlinedTextField(
+                    value = wallpaper.categoryId,
+                    onValueChange = { viewModel.updateEditingWallpaper { w -> w.copy(categoryId = it) } },
+                    label = { Text("Category (e.g. Cyberpunk, Anime, Nature)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = editorFieldColors(),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true
+                )
+
+                // Tags
+                OutlinedTextField(
+                    value = tagsInput,
+                    onValueChange = {
+                        tagsInput = it
+                        val tagList = it.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }
+                        viewModel.updateEditingWallpaper { w -> w.copy(tags = tagList) }
+                    },
+                    label = { Text("Tags (comma-separated, e.g. dark, neon, 4k)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = editorFieldColors(),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true
+                )
+
+                // Status
+                Text("Publication Lifecycle State", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WallpaperStatus.entries.forEach { status ->
+                        val selected = wallpaper.status == status
+                        OptionChoicePill(
+                            text = status.name,
+                            isSelected = selected,
+                            activeColor = when (status) {
+                                WallpaperStatus.PUBLISHED -> RoyalEmerald
+                                WallpaperStatus.DRAFT -> RoyalIndigo
+                                WallpaperStatus.INACTIVE -> RoyalGold
+                                WallpaperStatus.ARCHIVED -> TextMuted
+                            },
+                            onClick = { viewModel.updateEditingWallpaper { w -> w.copy(status = status) } }
                         )
                     }
                 }
             }
 
-            // Sound Metadata Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("3. LIVE WALLPAPER SOUND", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ChampagneGold)
-                            Text("Sound availability is content-driven per wallpaper.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(checked = soundAvailable, onCheckedChange = { soundAvailable = it })
-                    }
-
-                    if (soundAvailable) {
-                        Text("Default Audio Volume: ${(audioVolume * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
-                        Slider(
-                            value = audioVolume,
-                            onValueChange = { audioVolume = it },
-                            valueRange = 0.0f..1.0f
-                        )
-                    }
-                }
+            // SECTION 6: EMBEDDED VIRTUAL PHONE SIMULATOR
+            EditorSectionCard(title = "6. VIRTUAL RUNTIME SIMULATOR") {
+                VirtualPhoneSimulator(
+                    wallpaper = wallpaper,
+                    simulatorState = simulatorState,
+                    onTogglePowerLock = { viewModel.simulatorTogglePowerLock() },
+                    onToggleCharging = { viewModel.simulatorToggleCharging() },
+                    onToggleSound = { viewModel.simulatorToggleSound() },
+                    onCompleteTransition = { viewModel.simulatorCompleteTransition() }
+                )
             }
-
-            // Charging Experience Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("4. CHARGING EXPERIENCE", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ChampagneGold)
-                            Text("Define battery-connected animation transition.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(checked = chargingAnimationAvailable, onCheckedChange = { chargingAnimationAvailable = it })
-                    }
-
-                    if (chargingAnimationAvailable) {
-                        OutlinedTextField(
-                            value = chargingType,
-                            onValueChange = { chargingType = it },
-                            label = { Text("Charging Animation Type (e.g. ENERGY_BEAM, BATTERY_PULSE)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = chargingAsset,
-                            onValueChange = { chargingAsset = it },
-                            label = { Text("Charging Asset R2 Key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                    }
-                }
-            }
-
-            // Transition Experience Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = CardDefaults.outlinedCardBorder()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("5. VISUAL TRANSITIONS", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ChampagneGold)
-                            Text("Smooth state transitions supported by Android WallpaperService.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(checked = transitionAvailable, onCheckedChange = { transitionAvailable = it })
-                    }
-
-                    if (transitionAvailable) {
-                        OutlinedTextField(
-                            value = transitionType,
-                            onValueChange = { transitionType = it },
-                            label = { Text("Transition Type (e.g. FADE, CROSSFADE, ZOOM_ENTER)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
+
+@Composable
+private fun EditorSectionCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, AmoledCardBorder, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = AmoledSurface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = RoyalGold,
+                letterSpacing = 0.8.sp
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun OptionChoicePill(
+    text: String,
+    isSelected: Boolean,
+    activeColor: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) activeColor.copy(alpha = 0.2f) else AmoledSurfaceVariant)
+            .border(
+                1.dp,
+                if (isSelected) activeColor else AmoledCardBorder,
+                RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) activeColor else TextSecondary
+        )
+    }
+}
+
+@Composable
+private fun editorFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = RoyalGold,
+    unfocusedBorderColor = AmoledCardBorder,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    focusedLabelColor = RoyalGold,
+    unfocusedLabelColor = TextSecondary
+)

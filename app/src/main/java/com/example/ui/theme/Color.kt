@@ -2,39 +2,70 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Obsidian & Champagne Luxury Theme
-val ObsidianCanvas = Color(0xFF0F1115)
-val ObsidianSurface = Color(0xFF16191E)
-val ObsidianSurfaceElevated = Color(0xFF1E222A)
-val ObsidianBorder = Color(0xFF2B303B)
-val ObsidianBorderSubtle = Color(0xFF212630)
+// Geometric Balance Theme Palette (Material 3 Geometric Harmony)
+val GeoBackground = Color(0xFFFDFBFF)
+val GeoSurface = Color(0xFFFFFFFF)
+val GeoSurfaceVariant = Color(0xFFF3EDF7)
+val GeoSurfaceContainer = Color(0xFFF7F2FA)
+val GeoCardBorder = Color(0xFFCAC4D0)
+val GeoOutlineVariant = Color(0xFFE6E1E5)
 
-val ChampagneGold = Color(0xFFD4AF37)
-val ChampagneGoldLight = Color(0xFFE5C866)
-val ChampagneGoldDark = Color(0xFFA6841C)
-val ChampagneGoldSubtle = Color(0x26D4AF37)
+val GeoPrimary = Color(0xFF6750A4)
+val GeoPrimaryLight = Color(0xFF7E67B8)
+val GeoPrimaryContainer = Color(0xFFEADDFF)
+val GeoOnPrimaryContainer = Color(0xFF21005D)
 
-val TextPrimaryDark = Color(0xFFF1F3F5)
-val TextSecondaryDark = Color(0xFF9EABB8)
-val TextMutedDark = Color(0xFF636E7B)
+val GeoSecondary = Color(0xFF625B71)
+val GeoSecondaryContainer = Color(0xFFE8DEF8)
+val GeoOnSecondaryContainer = Color(0xFF1D192B)
 
-// Status & Functional Accents
-val StatusSuccessDark = Color(0xFF2ECC71)
-val StatusSuccessBgDark = Color(0x1F2ECC71)
-val StatusWarningDark = Color(0xFFF39C12)
-val StatusWarningBgDark = Color(0x1FF39C12)
-val StatusDangerDark = Color(0xFFE74C3C)
-val StatusDangerBgDark = Color(0x1FE74C3C)
-val StatusInfoDark = Color(0xFF3498DB)
-val StatusInfoBgDark = Color(0x1F3498DB)
+val GeoTertiary = Color(0xFF7D5260)
+val GeoTertiaryContainer = Color(0xFFD0BCFF)
+val GeoOnTertiaryContainer = Color(0xFF21005D)
+val GeoDarkAccent = Color(0xFF381E72)
 
-// Light Mode Counterparts
-val LightCanvas = Color(0xFFF8F9FA)
-val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceElevated = Color(0xFFF1F3F5)
-val LightBorder = Color(0xFFE2E6EA)
-val LightBorderSubtle = Color(0xFFEDF0F2)
+val GeoEmerald = Color(0xFF146C2E)
+val GeoEmeraldContainer = Color(0xFFC4EED0)
+val GeoEmeraldText = Color(0xFF0A3818)
 
-val TextPrimaryLight = Color(0xFF1A1D20)
-val TextSecondaryLight = Color(0xFF5A6472)
-val TextMutedLight = Color(0xFF8C96A3)
+val GeoGold = Color(0xFF8C5000)
+val GeoGoldLight = Color(0xFFA56300)
+val GeoGoldContainer = Color(0xFFFFDDB8)
+val GeoGoldText = Color(0xFF2B1700)
+
+val GeoRose = Color(0xFFB3261E)
+val GeoRoseContainer = Color(0xFFF9DEDC)
+val GeoRoseText = Color(0xFF410E0B)
+
+val TextPrimary = Color(0xFF1C1B1F)
+val TextSecondary = Color(0xFF49454F)
+val TextMuted = Color(0xFF79747E)
+
+// Semantic Theme Mappings
+val AmoledBackground = GeoBackground
+val AmoledSurface = GeoSurface
+val AmoledSurfaceVariant = GeoSurfaceContainer
+val AmoledCardBorder = GeoCardBorder
+
+val RoyalGold = GeoPrimary
+val RoyalGoldLight = GeoPrimaryLight
+val RoyalGoldContainer = GeoPrimaryContainer
+val RoyalGoldText = GeoOnPrimaryContainer
+
+val RoyalIndigo = GeoDarkAccent
+val RoyalIndigoContainer = GeoSecondaryContainer
+val RoyalIndigoText = GeoOnSecondaryContainer
+
+val RoyalEmerald = GeoEmerald
+val RoyalEmeraldContainer = GeoEmeraldContainer
+val RoyalEmeraldText = GeoEmeraldText
+
+val RoyalRose = GeoRose
+val RoyalRoseContainer = GeoRoseContainer
+val RoyalRoseText = GeoRoseText
+
+val StatusDraft = Color(0xFF49454F)
+val StatusPublished = GeoEmerald
+val StatusInactive = GeoGold
+val StatusArchived = Color(0xFF79747E)
+

@@ -1,6 +1,6 @@
 {
-  "name": "Wallpaper Admin",
-  "description": "Production Admin Panel for Live Wallpaper Platform managing Supabase, R2 media, charging experiences, subscriptions, and moderation.",
+  "name": "Live Wallpaper Royal Admin",
+  "description": "Production Admin Console for Live Wallpaper Royal to manage wallpapers, media references, taxonomy, users, moderation, announcements, audit logs, and configuration with Firebase and Cloud Firestore.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

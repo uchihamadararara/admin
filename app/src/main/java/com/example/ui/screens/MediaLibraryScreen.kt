@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,46 +15,49 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.*
-import com.example.data.repository.AdminRepository
-import com.example.ui.components.*
+import coil.compose.AsyncImage
+import com.example.data.model.MediaAsset
+import com.example.ui.components.DestructiveConfirmDialog
+import com.example.ui.components.EmptyStateView
+import com.example.ui.components.StatusPill
 import com.example.ui.theme.*
+import com.example.viewmodel.AdminViewModel
 
 @Composable
 fun MediaLibraryScreen(
-    repository: AdminRepository
+    viewModel: AdminViewModel,
+    modifier: Modifier = Modifier
 ) {
-    val mediaAssets by repository.mediaAssets.collectAsState()
-    val currentAdmin by repository.currentAdmin.collectAsState()
+    val mediaAssets by viewModel.mediaAssets.collectAsState()
+    val clipboardManager = LocalClipboardManager.current
 
-    var showUploadModal by remember { mutableStateOf(false) }
-    var selectedFilter by remember { mutableStateOf("ALL") }
-    var alertMessage by remember { mutableStateOf<String?>(null) }
+    var isAddingNew by remember { mutableStateOf(false) }
+    var assetToDelete by remember { mutableStateOf<MediaAsset?>(null) }
 
-    val canUpload = currentAdmin.role in listOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.CONTENT_MANAGER)
-    val canDelete = currentAdmin.role in listOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN)
-
-    val filteredAssets = mediaAssets.filter { asset ->
-        when (selectedFilter) {
-            "VIDEO" -> asset.assetType == "VIDEO"
-            "IMAGE" -> asset.assetType == "IMAGE"
-            "CHARGING" -> asset.assetType == "CHARGING_ANIMATION"
-            "AUDIO" -> asset.hasAudio
-            "UNLINKED" -> asset.linkedWallpaperId == null
-            else -> true
-        }
-    }
+    var newTitle by remember { mutableStateOf("") }
+    var newUrl by remember { mutableStateOf("") }
+    var newMimeType by remember { mutableStateOf("video/mp4") }
+    var newAudioEnabled by remember { mutableStateOf(false) }
+    var newCodec by remember { mutableStateOf("aac") }
+    var newFps by remember { mutableStateOf("60") }
+    var newWidth by remember { mutableStateOf("1080") }
+    var newHeight by remember { mutableStateOf("2400") }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
+            .background(AmoledBackground)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Top Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -61,138 +65,167 @@ fun MediaLibraryScreen(
         ) {
             Column {
                 Text(
-                    text = "CLOUDFLARE R2 MEDIA STORAGE",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = "Media Asset Registry",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
                 )
                 Text(
-                    text = "Secure server-side media dispatcher (R2 secrets never sent to client)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Cloudflare R2 Public HTTPS References (${mediaAssets.size} assets)",
+                    fontSize = 12.sp,
+                    color = TextSecondary
                 )
             }
 
-            if (canUpload) {
+            if (viewModel.canManageWallpapers()) {
                 Button(
-                    onClick = { showUploadModal = true },
-                    shape = RoundedCornerShape(6.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ChampagneGold, contentColor = ObsidianCanvas)
+                    onClick = { isAddingNew = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RoyalGold,
+                        contentColor = AmoledBackground
+                    ),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Upload R2 Asset", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    Text("Register URL", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
         }
 
-        alertMessage?.let { msg ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = StatusWarningBgDark),
-                border = CardDefaults.outlinedCardBorder()
+        // Cloudflare R2 Architecture Note
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(AmoledSurfaceVariant)
+                .border(1.dp, AmoledCardBorder, RoundedCornerShape(8.dp))
+                .padding(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = StatusWarningDark)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = msg, style = MaterialTheme.typography.bodySmall, color = StatusWarningDark)
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = { alertMessage = null }) {
-                        Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(14.dp))
-                    }
-                }
-            }
-        }
-
-        // Filters
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("ALL" to "All Assets", "VIDEO" to "Videos", "IMAGE" to "Images", "CHARGING" to "Charging FX", "AUDIO" to "Audio Tracks", "UNLINKED" to "Unlinked / Orphaned").forEach { (k, v) ->
-                FilterChip(
-                    selected = selectedFilter == k,
-                    onClick = { selectedFilter = k },
-                    label = { Text(v, style = MaterialTheme.typography.labelSmall) }
+                Icon(Icons.Default.CloudQueue, contentDescription = null, tint = RoyalGold, modifier = Modifier.size(20.dp))
+                Text(
+                    text = "ℹ️ R2 Storage Architecture: High-bitrate video/image assets reside on Cloudflare R2 public buckets. Direct uploads are performed out-of-band to protect secrets; register validated public URLs here.",
+                    fontSize = 11.sp,
+                    color = TextSecondary
                 )
             }
         }
 
-        // Media List
-        if (filteredAssets.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                EmptyStateCard(
-                    title = "No Media Assets Found",
-                    description = if (selectedFilter != "ALL") "No media assets found matching the '$selectedFilter' filter." else "No media files uploaded to R2 storage yet. Click 'Upload R2 Asset' to upload new media."
-                )
-            }
+        // Asset List
+        if (mediaAssets.isEmpty()) {
+            EmptyStateView(
+                icon = Icons.Default.PermMedia,
+                title = "No Media References Registered",
+                description = "Register your first Cloudflare R2 public HTTPS video or image URL to easily reference it when configuring wallpapers.",
+                actionLabel = if (viewModel.canManageWallpapers()) "+ Register Media URL" else null,
+                onAction = { isAddingNew = true }
+            )
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(filteredAssets, key = { it.id }) { asset ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(6.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = CardDefaults.outlinedCardBorder()
-                ) {
-                    Row(
+                items(mediaAssets, key = { it.id }) { asset ->
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, AmoledCardBorder, RoundedCornerShape(10.dp)),
+                        colors = CardDefaults.cardColors(containerColor = AmoledSurface)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = asset.filename,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                StatusBadge(text = asset.assetType, type = StatusBadgeType.INFO)
-                                if (asset.hasAudio) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    StatusBadge(text = "AUDIO", type = StatusBadgeType.GOLD)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Thumbnail / Preview
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0F111A)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (asset.mimeType.startsWith("image")) {
+                                    AsyncImage(
+                                        model = asset.url,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Videocam,
+                                        contentDescription = null,
+                                        tint = RoyalGold,
+                                        modifier = Modifier.size(28.dp)
+                                    )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Key: ${asset.r2ObjectKey} · Size: %.2f MB".format(asset.sizeBytes / (1024.0 * 1024.0)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (asset.linkedWallpaperId != null) {
+
+                            // Asset Details
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = asset.title.ifBlank { "Media Asset" },
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    StatusPill(
+                                        text = asset.mimeType.substringAfter("/").uppercase(),
+                                        backgroundColor = RoyalIndigoContainer,
+                                        textColor = RoyalIndigoText
+                                    )
+                                }
+
                                 Text(
-                                    text = "Linked to Wallpaper ID: ${asset.linkedWallpaperId}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = StatusSuccessDark
+                                    text = asset.url,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = TextMuted,
+                                    maxLines = 1
                                 )
-                            } else {
+
                                 Text(
-                                    text = "Unlinked Asset (Safe to remove if unused)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = StatusWarningDark
+                                    text = "${asset.width ?: 1080}x${asset.height ?: 2400} • ${asset.fps ?: 60}fps • ${if (asset.hasAudio) "Audio (${asset.audioCodec ?: "aac"})" else "No Audio"}",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
                                 )
                             }
-                        }
 
-                        if (canDelete) {
-                            IconButton(
-                                onClick = {
-                                    val deleted = repository.deleteMediaAsset(asset.id)
-                                    if (!deleted) {
-                                        alertMessage = "Cannot delete '${asset.filename}' because it is linked to an active wallpaper. Unlink it first."
+                            // Actions
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(asset.url))
+                                        viewModel.showToast("URL copied to clipboard")
+                                    },
+                                    colors = IconButtonDefaults.iconButtonColors(contentColor = RoyalGold)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy URL", modifier = Modifier.size(16.dp))
+                                }
+
+                                if (viewModel.canManageWallpapers()) {
+                                    IconButton(
+                                        onClick = { assetToDelete = asset },
+                                        colors = IconButtonDefaults.iconButtonColors(contentColor = RoyalRose)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete Reference", modifier = Modifier.size(16.dp))
                                     }
                                 }
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = StatusDangerDark)
                             }
                         }
                     }
@@ -200,59 +233,108 @@ fun MediaLibraryScreen(
             }
         }
     }
-}
 
-    if (showUploadModal) {
-        var filename by remember { mutableStateOf("quantum_aurora_60fps.mp4") }
-        var assetType by remember { mutableStateOf("VIDEO") }
-        var hasAudio by remember { mutableStateOf(true) }
-
+    // Add Media Reference Dialog
+    if (isAddingNew) {
         AlertDialog(
-            onDismissRequest = { showUploadModal = false },
-            title = { Text("Upload R2 Media via Secure Server Dispatcher") },
+            onDismissRequest = { isAddingNew = false },
+            title = {
+                Text("Register R2 Public Media Asset", fontWeight = FontWeight.Bold, color = TextPrimary)
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "Cloudflare R2 Presigned Upload URL will be requested from Edge Function 'admin-media-upload'.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
                     OutlinedTextField(
-                        value = filename,
-                        onValueChange = { filename = it },
-                        label = { Text("Filename") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        value = newTitle,
+                        onValueChange = { newTitle = it },
+                        label = { Text("Asset Title (e.g. Cyber City Home Loop)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = hasAudio, onCheckedChange = { hasAudio = it })
-                        Text("Contains Audio Track", style = MaterialTheme.typography.bodyMedium)
+
+                    OutlinedTextField(
+                        value = newUrl,
+                        onValueChange = { newUrl = it },
+                        label = { Text("Public HTTPS URL *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newMimeType,
+                            onValueChange = { newMimeType = it },
+                            label = { Text("MIME Type") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = newFps,
+                            onValueChange = { newFps = it },
+                            label = { Text("FPS") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Has Embedded Audio", fontSize = 12.sp, color = TextPrimary)
+                        Switch(
+                            checked = newAudioEnabled,
+                            onCheckedChange = { newAudioEnabled = it }
+                        )
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val newAsset = MediaAsset(
-                            r2ObjectKey = "media/${assetType.lowercase()}/$filename",
-                            filename = filename,
-                            mimeType = if (filename.endsWith(".mp4")) "video/mp4" else "image/jpeg",
-                            sizeBytes = 24500000L,
-                            assetType = assetType,
-                            hasAudio = hasAudio
+                        val asset = MediaAsset(
+                            title = newTitle,
+                            url = newUrl,
+                            mimeType = newMimeType,
+                            hasAudio = newAudioEnabled,
+                            audioCodec = if (newAudioEnabled) newCodec else null,
+                            fps = newFps.toIntOrNull() ?: 60,
+                            width = newWidth.toIntOrNull() ?: 1080,
+                            height = newHeight.toIntOrNull() ?: 2400
                         )
-                        repository.registerMediaAsset(newAsset)
-                        showUploadModal = false
+                        viewModel.saveMediaAsset(asset) { success, _ ->
+                            if (success) {
+                                isAddingNew = false
+                                newTitle = ""
+                                newUrl = ""
+                            }
+                        }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = ChampagneGold, contentColor = ObsidianCanvas)
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalGold, contentColor = AmoledBackground)
                 ) {
-                    Text("Register & Dispatch")
+                    Text("Register Reference", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showUploadModal = false }) {
+                OutlinedButton(onClick = { isAddingNew = false }) {
                     Text("Cancel")
                 }
-            }
+            },
+            containerColor = AmoledSurface
+        )
+    }
+
+    // Delete Confirmation
+    assetToDelete?.let { asset ->
+        DestructiveConfirmDialog(
+            title = "Delete Media Reference?",
+            message = "This removes the metadata record from Firestore. Existing wallpapers configured with this URL will keep their string reference.",
+            confirmText = "Delete Reference",
+            onConfirm = {
+                viewModel.deleteMediaAsset(asset.id, asset.url)
+                assetToDelete = null
+            },
+            onDismiss = { assetToDelete = null }
         )
     }
 }

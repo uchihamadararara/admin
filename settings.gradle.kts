@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Live Wallpaper Admin"
+rootProject.name = "Live Wallpaper Royal Admin"
 
 include(":app")
