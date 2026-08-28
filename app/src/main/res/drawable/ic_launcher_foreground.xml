@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Phone Screen Frame -->
+    <path
+        android:fillColor="#00FFFFFF"
+        android:pathData="M38,26 h32 a4,4 0 0,1 4,4 v48 a4,4 0 0,1 -4,4 h-32 a4,4 0 0,1 -4,-4 v-48 a4,4 0 0,1 4,-4 z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#38BDF8" />
+    <!-- Wallpaper Art Wave / Sun inside screen -->
+    <path
+        android:pathData="M36,54 Q44,48 54,54 T72,50 L72,74 a2,2 0 0,1 -2,2 H38 a2,2 0 0,1 -2,-2 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="36"
+                android:startY="50"
+                android:endX="72"
+                android:endY="76"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00D2FF" />
+                <item android:offset="1.0" android:color="#3B82F6" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Live Play Sparkle Indicator -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,40 l10,6 -10,6 z" />
+</vector>

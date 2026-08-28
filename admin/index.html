@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Admin Dashboard | Live Wallpaper Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.min.js"></script>
+</head>
+<body class="dark-theme">
+  <div id="app" class="app-container">
+    
+    <!-- TOP APP HEADER -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <button id="btn-toggle-drawer" class="icon-btn mobile-only" aria-label="Open Navigation Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="brand-badge">
+          <div class="brand-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2.2"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 18h.01"/><polygon points="10 8 16 11 10 14" fill="#00D2FF"/></svg>
+          </div>
+          <div class="brand-text">
+            <span class="brand-name">WALLPAPER<span class="accent">ADMIN</span></span>
+            <span class="platform-env">PRODUCTION CONSOLE</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <div id="user-role-badge" class="role-badge role-super">
+          <span class="status-dot"></span>
+          <span id="nav-role-text">SUPER_ADMIN</span>
+        </div>
+        <div class="user-dropdown-container">
+          <button id="btn-user-menu" class="user-profile-btn" aria-label="Admin Profile Menu">
+            <span id="nav-user-email" class="truncate" style="max-width:180px;">admin@livewallpaper.app</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div id="user-menu-dropdown" class="dropdown-menu hidden">
+            <div class="dropdown-header">
+              <p class="text-xs text-muted">Authenticated Session</p>
+              <p id="dropdown-user-email" class="text-sm font-semibold truncate"></p>
+              <p id="dropdown-user-role" class="text-xs text-cyan mt-1"></p>
+            </div>
+            <div class="dropdown-divider"></div>
+            <button id="btn-supabase-config" class="dropdown-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Supabase Project Connection
+            </button>
+            <button id="btn-switch-theme" class="dropdown-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              Theme Toggle (AMOLED)
+            </button>
+            <button id="btn-logout" class="dropdown-item text-danger">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <!-- SIDEBAR NAVIGATION / MOBILE DRAWER -->
+      <aside id="app-drawer" class="sidebar">
+        <div class="sidebar-header mobile-only">
+          <div class="sidebar-title">Admin Navigation</div>
+          <button id="btn-close-drawer" class="icon-btn" aria-label="Close Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <nav class="sidebar-nav">
+          <div class="nav-section-title">CORE CATALOG</div>
+          <button class="nav-link active" data-section="dashboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Dashboard</span>
+          </button>
+
+          <button class="nav-link" data-section="wallpapers">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>Wallpapers Catalog</span>
+            <span id="badge-wallpapers-count" class="pill-badge">0</span>
+          </button>
+
+          <button class="nav-link" data-section="media-library">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span>Media Library (R2)</span>
+          </button>
+
+          <button class="nav-link" data-section="categories">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>
+            <span>Categories</span>
+          </button>
+
+          <button class="nav-link" data-section="tags">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            <span>Tags</span>
+          </button>
+
+          <div class="nav-section-title">USERS & MONETIZATION</div>
+          <button class="nav-link" data-section="users">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Users Explorer</span>
+          </button>
+
+          <button class="nav-link" data-section="subscriptions">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            <span>Subscriptions (Google Play)</span>
+          </button>
+
+          <button class="nav-link" data-section="admob-ssv">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>AdMob / SSV Events</span>
+          </button>
+
+          <button class="nav-link" data-section="moderation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Moderation Queue</span>
+            <span id="badge-reports-count" class="pill-badge pill-danger hidden">0</span>
+          </button>
+
+          <div class="nav-section-title">SYSTEM & GOVERNANCE</div>
+          <button class="nav-link" data-section="announcements">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span>Announcements</span>
+          </button>
+
+          <button class="nav-link" data-section="app-config">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>App Configuration</span>
+          </button>
+
+          <button class="nav-link" data-section="audit-logs">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <span>Audit Logs</span>
+          </button>
+
+          <button class="nav-link" data-section="admin-management" id="nav-admin-mgmt">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Admin Management</span>
+          </button>
+
+          <button class="nav-link" data-section="settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings & Health</span>
+          </button>
+        </nav>
+      </aside>
+      <div id="drawer-backdrop" class="drawer-backdrop"></div>
+
+      <!-- MAIN CONTENT VIEWPORT -->
+      <main class="content-area">
+        <!-- NOTIFICATION BANNER / TOAST CONTAINER -->
+        <div id="toast-container" class="toast-container"></div>
+
+        <!-- ======================================================= -->
+        <!-- 1. DASHBOARD VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-dashboard" class="admin-section active">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Operations Dashboard</h1>
+              <p class="section-subtitle">Real-time catalog metrics and platform infrastructure health</p>
+            </div>
+            <button id="btn-refresh-dashboard" class="btn btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Refresh Data
+            </button>
+          </div>
+
+          <!-- PRIMARY METRICS CARDS (10 Key Counters) -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-label">TOTAL WALLPAPERS</span>
+                <span class="metric-icon-box cyan"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></span>
+              </div>
+              <div class="metric-value" id="stat-total-wallpapers">0</div>
+              <div class="metric-subtext">
+                <span id="stat-published-count" class="text-success font-medium">0 Published</span> • 
+                <span id="stat-draft-count" class="text-warning">0 Draft</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-label">EXPERIENCE TYPES</span>
+                <span class="metric-icon-box blue"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+              </div>
+              <div class="metric-value"><span id="stat-live-count">0</span> <span class="text-sm font-normal text-muted">Live Total</span></div>
+              <div class="metric-subtext">
+                <span id="stat-normal-count">0 Normal</span> • 
+                <span id="stat-transition-count" class="text-cyan">0 Transition</span> • 
+                <span id="stat-static-count">0 Static</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-label">REGISTERED USERS</span>
+                <span class="metric-icon-box green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg></span>
+              </div>
+              <div class="metric-value" id="stat-total-users">0</div>
+              <div class="metric-subtext">
+                <span id="stat-active-subs" class="text-success font-medium">0 VIP Active</span> • 
+                <span id="stat-free-users">0 Free</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span class="metric-label">R2 MEDIA ASSETS</span>
+                <span class="metric-icon-box purple"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+              </div>
+              <div class="metric-value" id="stat-total-assets">0</div>
+              <div class="metric-subtext">
+                <span id="stat-media-size">0 MB</span> total • 
+                <span id="stat-orphan-assets" class="text-warning">0 Orphan</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DASHBOARD LOWER GRIDS -->
+          <div class="dashboard-columns mt-3">
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Recent Admin Activity (Audit Ledger)</h3>
+                <button class="text-btn text-cyan" onclick="window.AdminApp.navigateTo('audit-logs')">View All</button>
+              </div>
+              <div class="panel-body p-0">
+                <div id="dash-recent-audit" class="activity-feed">
+                  <div class="empty-state-card p-3">
+                    <p class="text-muted text-sm">No recent admin activity recorded yet.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Operations & Monetization Signals</h3>
+              </div>
+              <div class="panel-body">
+                <div class="diagnostics-row">
+                  <div class="diag-item">
+                    <span class="diag-label">Open Moderation Reports</span>
+                    <span id="dash-open-reports" class="diag-val text-warning font-semibold">0</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Google Play Billing Events</span>
+                    <span id="dash-verified-purchases" class="diag-val text-success font-semibold">0</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Rewarded SSV Claims</span>
+                    <span id="dash-rewarded-claims" class="diag-val font-semibold">0</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Cloudflare R2 Storage</span>
+                    <span class="diag-val text-success font-semibold">● Connected</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 2. WALLPAPERS CATALOG VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-wallpapers" class="admin-section">
+          <!-- LIST SUB-VIEW -->
+          <div id="subview-wallpaper-list">
+            <div class="section-header">
+              <div>
+                <h1 class="section-title">Wallpapers Catalog</h1>
+                <p class="section-subtitle">Manage static, simple live (NORMAL), and multi-state (TRANSITION) wallpapers</p>
+              </div>
+              <button id="btn-create-wallpaper" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Create Wallpaper
+              </button>
+            </div>
+
+            <!-- COMPREHENSIVE FILTER & SEARCH BAR -->
+            <div class="filter-card">
+              <div class="filter-search">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="filter-wallpaper-search" placeholder="Search by title, tag, ID...">
+              </div>
+              <div class="filter-actions">
+                <select id="filter-wallpaper-type" class="filter-select">
+                  <option value="ALL">All Architecture Types</option>
+                  <option value="STATIC">Static Image Only</option>
+                  <option value="NORMAL">Live: NORMAL (Single Video + Charging)</option>
+                  <option value="TRANSITION">Live: TRANSITION (Multi-state Loop)</option>
+                </select>
+                <select id="filter-wallpaper-status" class="filter-select">
+                  <option value="ALL">All Statuses</option>
+                  <option value="PUBLISHED">Published</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="ARCHIVED">Archived</option>
+                </select>
+                <select id="filter-wallpaper-tier" class="filter-select">
+                  <option value="ALL">All Tiers (Free & VIP)</option>
+                  <option value="FREE">Free Only</option>
+                  <option value="PREMIUM">Premium VIP</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- RESPONSIVE WALLPAPER CARDS -->
+            <div id="wallpapers-grid" class="wallpapers-grid">
+              <!-- Rendered dynamically via app.js -->
+            </div>
+          </div>
+
+          <!-- UNIFIED CREATE / EDIT WALLPAPER SUB-VIEW -->
+          <div id="subview-wallpaper-editor" class="hidden">
+            <!-- TOP STICKY ACTION BAR -->
+            <div class="editor-header sticky-header">
+              <div class="flex items-center gap-2">
+                <button id="btn-editor-back" class="btn btn-secondary btn-sm">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                  Back to Catalog
+                </button>
+                <div class="editor-title-box">
+                  <h2 id="editor-title" class="editor-heading">Create Wallpaper</h2>
+                  <span id="editor-status-pill" class="pill-badge pill-draft">DRAFT</span>
+                </div>
+              </div>
+              
+              <div class="editor-actions">
+                <button id="btn-save-draft" class="btn btn-secondary">Save Draft</button>
+                <button id="btn-editor-preview-sim" class="btn btn-secondary" title="Open in Virtual Simulator">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 18h.01"/></svg>
+                  Preview Simulator
+                </button>
+                <button id="btn-publish-wallpaper" class="btn btn-primary">Publish Wallpaper</button>
+              </div>
+            </div>
+
+            <div class="editor-form-full">
+              <!-- SECTION A: BASIC INFORMATION -->
+              <div class="editor-section-card">
+                <h3 class="section-card-title">Section A: Basic Information & Taxonomy</h3>
+                <div class="form-group">
+                  <label for="wp-title">Wallpaper Title <span class="text-danger">*</span></label>
+                  <input type="text" id="wp-title" placeholder="e.g. Neon Cyber Odyssey" class="form-input" required>
+                </div>
+                <div class="form-group">
+                  <label for="wp-desc">Description</label>
+                  <textarea id="wp-desc" rows="2" placeholder="Atmospheric cinematic wallpaper designed for AMOLED displays..." class="form-input"></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group flex-1">
+                    <label for="wp-category">Category</label>
+                    <select id="wp-category" class="form-input">
+                      <option value="">Select Category</option>
+                    </select>
+                  </div>
+                  <div class="form-group flex-1">
+                    <label for="wp-sort-order">Sort Order Priority</label>
+                    <input type="number" id="wp-sort-order" value="0" class="form-input">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="wp-tags-input">Tags (comma-separated discovery tags)</label>
+                  <input type="text" id="wp-tags-input" placeholder="cyberpunk, neon, dark, 4k, amoled" class="form-input">
+                </div>
+                <div class="switches-grid">
+                  <label class="switch-control">
+                    <input type="checkbox" id="wp-is-premium">
+                    <span class="switch-slider"></span>
+                    <span class="switch-label font-semibold">Premium (VIP Exclusive)</span>
+                  </label>
+                  <label class="switch-control">
+                    <input type="checkbox" id="wp-is-featured">
+                    <span class="switch-slider"></span>
+                    <span class="switch-label">Featured on Home</span>
+                  </label>
+                  <label class="switch-control">
+                    <input type="checkbox" id="wp-is-trending">
+                    <span class="switch-slider"></span>
+                    <span class="switch-label">Trending Badge</span>
+                  </label>
+                  <label class="switch-control">
+                    <input type="checkbox" id="wp-is-new" checked>
+                    <span class="switch-slider"></span>
+                    <span class="switch-label">New Release Badge</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- SECTION B: EXPERIENCE ARCHITECTURE -->
+              <div class="editor-section-card">
+                <h3 class="section-card-title">Section B: Wallpaper Architecture Type</h3>
+                <div class="type-selector-grid">
+                  <label class="type-option-card">
+                    <input type="radio" name="content_type_choice" value="LIVE_NORMAL" checked>
+                    <div class="type-option-content">
+                      <div class="type-option-title">NORMAL Live Wallpaper</div>
+                      <p class="type-option-desc">Single primary live video with optional content-driven charging entry, loop, and return assets. Stays NORMAL even when charging assets are configured.</p>
+                    </div>
+                  </label>
+                  <label class="type-option-card">
+                    <input type="radio" name="content_type_choice" value="LIVE_TRANSITION">
+                    <div class="type-option-content">
+                      <div class="type-option-title">TRANSITION Live Wallpaper</div>
+                      <p class="type-option-desc">Multi-state interactive live wallpaper with distinct Home, Lock, and transition sequences configured in offline bundle manifests.</p>
+                    </div>
+                  </label>
+                  <label class="type-option-card">
+                    <input type="radio" name="content_type_choice" value="STATIC">
+                    <div class="type-option-content">
+                      <div class="type-option-title">STATIC Wallpaper</div>
+                      <p class="type-option-desc">High-resolution single image asset (JPEG, PNG, WEBP) for static background display.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- SECTION C: MEDIA SLOTS & ASSETS CONFIGURATION -->
+              <div class="editor-section-card">
+                <div class="flex-between mb-3">
+                  <div>
+                    <h3 class="section-card-title m-0">Section C: Media Slots & Content Configuration</h3>
+                    <p class="text-xs text-muted mt-1">Upload video / image assets directly to Cloudflare R2 storage with automatic metadata & SHA-256 analysis</p>
+                  </div>
+                </div>
+
+                <!-- 1. STATIC MEDIA CONTAINER -->
+                <div id="media-slots-static" class="media-slots-container hidden">
+                  <div class="media-slot-item required-slot" data-slot="primary_image">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">STATIC IMAGE ASSET <span class="text-danger">*</span></span>
+                        <p class="text-xs text-muted">Primary high-resolution still image</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-primary_image">Required</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-static-image" accept="image/jpeg,image/png,image/webp" class="file-picker-input">
+                      <div id="meta-slot-primary_image" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. NORMAL LIVE MEDIA SLOTS CONTAINER -->
+                <div id="media-slots-normal" class="media-slots-container">
+                  <div class="media-slot-item required-slot" data-slot="primary">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">PRIMARY LIVE VIDEO <span class="text-danger">*</span></span>
+                        <p class="text-xs text-muted">Primary looping live wallpaper video (MP4/WebM)</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-primary">Required</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-primary" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-primary" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="slot-group-title">Optional Content-Driven Charging Experience</div>
+                  <div class="info-alert mb-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                    <span class="text-xs">Charging must ALWAYS use admin-configured media. Never procedural animations or fake battery percentage Canvas rings. If omitted, normal loop continues.</span>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="charging_entry">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">CHARGING ENTRY TRANSITION</span>
+                        <p class="text-xs text-muted">Plays once upon charger connection, then loops charging</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-charging_entry">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-charging_entry" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-charging_entry" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="charging_loop">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">CHARGING LOOP VIDEO</span>
+                        <p class="text-xs text-muted">Continuous loop played while charging</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-charging_loop">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-charging_loop" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-charging_loop" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="charging_return">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">CHARGING RETURN TRANSITION</span>
+                        <p class="text-xs text-muted">Plays once upon unplugging charger, returning to primary loop</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-charging_return">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-charging_return" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-charging_return" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. TRANSITION LIVE MEDIA SLOTS CONTAINER -->
+                <div id="media-slots-transition" class="media-slots-container hidden">
+                  <!-- Visual State Flow Diagram -->
+                  <div class="state-flow-diagram">
+                    <div class="flow-step">LOCK</div>
+                    <div class="flow-arrow">↓ <span>Lock → Home</span></div>
+                    <div class="flow-step highlight">HOME (Base)</div>
+                    <div class="flow-arrow">↓ <span>Charge Transition</span></div>
+                    <div class="flow-step">CHARGING LOOP</div>
+                    <div class="flow-arrow">↓ <span>Return Transition</span></div>
+                    <div class="flow-step">HOME / LOCK</div>
+                  </div>
+
+                  <div class="slot-group-title">Base Loops</div>
+                  <div class="media-slot-item required-slot" data-slot="home">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">HOME VIDEO <span class="text-danger">*</span></span>
+                        <p class="text-xs text-muted">Base loop displayed on unlocked home screen</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-home">Required</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-home" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-home" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="lock">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">LOCK SCREEN VIDEO</span>
+                        <p class="text-xs text-muted">Loop displayed on keyguard lock screen (falls back to Home)</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-lock">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-lock" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-lock" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="slot-group-title">State Transitions</div>
+                  <div class="media-slot-item" data-slot="lock_to_home">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">LOCK → HOME TRANSITION</span>
+                        <p class="text-xs text-muted">Transition animation triggered on device unlock</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-lock_to_home">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-lock_to_home" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-lock_to_home" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="home_to_lock">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">HOME → LOCK TRANSITION</span>
+                        <p class="text-xs text-muted">Transition triggered when screen turns off or locks</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-home_to_lock">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-home_to_lock" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-home_to_lock" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="slot-group-title">Charging Transitions (Content-Driven)</div>
+                  <div class="media-slot-item" data-slot="home_to_charging">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">HOME → CHARGING TRANSITION</span>
+                        <p class="text-xs text-muted">Triggers when plugged in while unlocked on Home</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-home_to_charging">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-home_to_charging" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-home_to_charging" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="lock_to_charging">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">LOCK → CHARGING TRANSITION</span>
+                        <p class="text-xs text-muted">Triggers when plugged in while device is locked</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-lock_to_charging">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-lock_to_charging" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-lock_to_charging" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="transition_charging_loop">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">CHARGING LOOP</span>
+                        <p class="text-xs text-muted">Continuous charging loop</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-transition_charging_loop">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-transition_charging_loop" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-transition_charging_loop" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+
+                  <div class="media-slot-item" data-slot="transition_charging_return">
+                    <div class="slot-header">
+                      <div>
+                        <span class="slot-name">CHARGING RETURN TRANSITION</span>
+                        <p class="text-xs text-muted">Plays upon unplugging, returning to previous state</p>
+                      </div>
+                      <span class="slot-status" id="status-slot-transition_charging_return">Optional</span>
+                    </div>
+                    <div class="slot-body">
+                      <input type="file" id="file-slot-transition_charging_return" accept="video/mp4,video/webm" class="file-picker-input">
+                      <div id="meta-slot-transition_charging_return" class="slot-metadata-box hidden"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECTION D: AUDIO & SOUND ARCHITECTURE -->
+              <div class="editor-section-card">
+                <h3 class="section-card-title">Section D: Audio & Sound Architecture</h3>
+                <div class="info-alert">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <div>
+                    <strong>Wallpaper-Scoped Sound Choice (No Global Sound Override)</strong>
+                    <p class="text-xs text-muted mt-1">Audio presence is automatically detected from video tracks. When applied in the Android app, users choose Sound ON/OFF per wallpaper. Sound strictly mutes whenever the wallpaper surface is hidden or inside another app.</p>
+                  </div>
+                </div>
+                <div id="detected-audio-summary" class="mt-2 text-sm">
+                  No audio tracks detected in uploaded assets.
+                </div>
+              </div>
+
+              <!-- SECTION E: VALIDATION & PUBLISHING REPORT -->
+              <div class="editor-section-card">
+                <h3 class="section-card-title">Section E: Publishing Validation Report</h3>
+                <div id="validation-report-box" class="validation-box valid">
+                  <div id="validation-messages">Ready for draft saving.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 3. MEDIA LIBRARY (R2) VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-media-library" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Media Library (Cloudflare R2)</h1>
+              <p class="section-subtitle">Manage uploaded video/image assets, resolution, FPS, audio channels, and orphan status</p>
+            </div>
+            <button id="btn-upload-direct-media" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Upload Asset to R2
+            </button>
+          </div>
+
+          <!-- MEDIA SEARCH & FILTERS -->
+          <div class="filter-card">
+            <div class="filter-search">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="filter-media-search" placeholder="Search by storage key, slot, SHA-256...">
+            </div>
+            <div class="filter-actions">
+              <select id="filter-media-type" class="filter-select">
+                <option value="ALL">All Media Types</option>
+                <option value="VIDEO">Video Assets Only</option>
+                <option value="IMAGE">Image Assets Only</option>
+              </select>
+              <select id="filter-media-link" class="filter-select">
+                <option value="ALL">All Link Statuses</option>
+                <option value="LINKED">Linked to Wallpaper</option>
+                <option value="ORPHAN">Orphan (Unlinked)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- MEDIA ASSETS GRID / TABLE -->
+          <div id="media-library-grid" class="media-library-grid">
+            <!-- Rendered via app.js -->
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 4. CATEGORIES VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-categories" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Catalog Categories</h1>
+              <p class="section-subtitle">Organize discovery categories, slugs, and display sorting order</p>
+            </div>
+            <button id="btn-add-category" class="btn btn-primary">+ Add Category</button>
+          </div>
+
+          <div id="categories-list-container" class="entity-cards-grid">
+            <!-- Rendered via app.js -->
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 5. TAGS VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-tags" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Discovery Tags</h1>
+              <p class="section-subtitle">Manage search tags, usage frequencies, and taxonomy</p>
+            </div>
+            <button id="btn-add-tag" class="btn btn-primary">+ Add Tag</button>
+          </div>
+
+          <div class="filter-card">
+            <div class="filter-search">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="filter-tag-search" placeholder="Search tags...">
+            </div>
+          </div>
+
+          <div id="tags-list-container" class="tags-pill-cloud">
+            <!-- Rendered via app.js -->
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 6. USERS EXPLORER VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-users" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">User Accounts Explorer</h1>
+              <p class="section-subtitle">Inspect registered app accounts, VIP subscriptions, and applied wallpapers</p>
+            </div>
+          </div>
+
+          <div class="filter-card">
+            <div class="filter-search">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="filter-user-search" placeholder="Search by Email or User UUID...">
+            </div>
+            <div class="filter-actions">
+              <select id="filter-user-tier" class="filter-select">
+                <option value="ALL">All Subscription Tiers</option>
+                <option value="ACTIVE">VIP Active Only</option>
+                <option value="FREE">Free Tier Only</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="users-list-container" class="user-cards-grid">
+            <!-- Injected via app.js -->
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 7. SUBSCRIPTIONS (GOOGLE PLAY BILLING) VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-subscriptions" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Google Play Billing Diagnostics</h1>
+              <p class="section-subtitle">Authoritative subscription purchases, order tokens, and verification status</p>
+            </div>
+          </div>
+
+          <div class="info-alert mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div>
+              <strong>Authoritative Google Play Billing Architecture</strong>
+              <p class="text-xs text-muted">Populated automatically via the <code>verify-purchase</code> Supabase Edge Function upon Google Play Developer API verification. No manual fake transactions are allowed.</p>
+              <div class="mt-2 flex gap-1 flex-wrap">
+                <span class="pill-badge pill-cyan">vip_3days</span>
+                <span class="pill-badge pill-cyan">vip_7days</span>
+                <span class="pill-badge pill-cyan">vip_14days</span>
+                <span class="pill-badge pill-cyan">vip_1month</span>
+                <span class="pill-badge pill-cyan">vip_lifetime</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="subscriptions-list-container" class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event ID</th>
+                  <th>User ID</th>
+                  <th>Product Tier</th>
+                  <th>Order ID</th>
+                  <th>Token Hash</th>
+                  <th>Verification</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody id="billing-table-body">
+                <!-- Injected via app.js -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 8. REWARDED ADS / ADMOB SSV VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-admob-ssv" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Rewarded Ads / AdMob SSV</h1>
+              <p class="section-subtitle">Real-time Server-Side Verification logs for rewarded unlock tokens</p>
+            </div>
+          </div>
+
+          <div id="ssv-list-container" class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event ID</th>
+                  <th>User</th>
+                  <th>Reward</th>
+                  <th>Ad Unit</th>
+                  <th>Signature Verified</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody id="ssv-table-body">
+                <!-- Injected via app.js -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 9. MODERATION VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-moderation" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Moderation & Safety Queue</h1>
+              <p class="section-subtitle">Resolve user reports, review flagged content, and audit moderation notes</p>
+            </div>
+          </div>
+
+          <div class="filter-card">
+            <div class="filter-actions">
+              <button class="btn btn-secondary btn-sm active" data-mod-filter="ALL">All Reports</button>
+              <button class="btn btn-secondary btn-sm" data-mod-filter="OPEN">Open</button>
+              <button class="btn btn-secondary btn-sm" data-mod-filter="IN_REVIEW">In Review</button>
+              <button class="btn btn-secondary btn-sm" data-mod-filter="RESOLVED">Resolved</button>
+              <button class="btn btn-secondary btn-sm" data-mod-filter="DISMISSED">Dismissed</button>
+            </div>
+          </div>
+
+          <div id="moderation-list-container" class="moderation-cards-grid">
+            <!-- Injected via app.js -->
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 10. ANNOUNCEMENTS VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-announcements" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">App Announcements</h1>
+              <p class="section-subtitle">Broadcast in-app notices and patch announcements to user clients</p>
+            </div>
+            <button id="btn-add-announcement" class="btn btn-primary">+ Create Announcement</button>
+          </div>
+
+          <div id="announcements-list-container" class="announcements-grid">
+            <!-- Injected via app.js -->
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 11. APP CONFIGURATION VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-app-config" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Remote App Configuration</h1>
+              <p class="section-subtitle">Manage client version enforcement, maintenance mode, and broadcast alerts</p>
+            </div>
+            <button id="btn-save-app-config" class="btn btn-primary">Save Configuration</button>
+          </div>
+
+          <div class="panel max-w-xl">
+            <div class="panel-body">
+              <div class="form-group">
+                <label for="cfg-min-version">Minimum Supported Android App Version</label>
+                <input type="text" id="cfg-min-version" value="1.0.0" class="form-input" placeholder="1.0.0">
+                <p class="text-xs text-muted mt-1">Users below this version will receive a prompt to update.</p>
+              </div>
+
+              <div class="form-group">
+                <label for="cfg-latest-version">Latest Released Client Version</label>
+                <input type="text" id="cfg-latest-version" value="1.0.0" class="form-input" placeholder="1.0.0">
+              </div>
+
+              <div class="form-group">
+                <label class="switch-control">
+                  <input type="checkbox" id="cfg-maintenance-mode">
+                  <span class="switch-slider"></span>
+                  <span class="switch-label font-semibold">Enable Global Maintenance Mode</span>
+                </label>
+                <p class="text-xs text-muted mt-1">Temporarily halts live wallpaper downloads and displays message to clients.</p>
+              </div>
+
+              <div class="form-group">
+                <label for="cfg-maintenance-msg">Maintenance Notice Message</label>
+                <textarea id="cfg-maintenance-msg" rows="3" class="form-input" placeholder="We are currently upgrading our cloud infrastructure. Please check back shortly..."></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 12. AUDIT LOGS VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-audit-logs" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Immutable Audit Trail</h1>
+              <p class="section-subtitle">Append-only ledger of every administrative mutation and role change</p>
+            </div>
+          </div>
+
+          <div class="filter-card">
+            <div class="filter-search">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="filter-audit-search" placeholder="Search by Action, Entity, Admin ID...">
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Admin User</th>
+                  <th>Role</th>
+                  <th>Action</th>
+                  <th>Entity</th>
+                  <th>Entity ID</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="audit-logs-table-body">
+                <!-- Injected via app.js -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 13. ADMIN MANAGEMENT VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-admin-management" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Admin Management & Roles</h1>
+              <p class="section-subtitle">SUPER_ADMIN only: Assign RBAC team roles, invite admins, toggle access</p>
+            </div>
+            <button id="btn-invite-admin" class="btn btn-primary">+ Add / Invite Admin</button>
+          </div>
+
+          <!-- RBAC PERMISSIONS OVERVIEW CARDS -->
+          <div class="rbac-grid mb-3">
+            <div class="rbac-card">
+              <div class="font-semibold text-xs text-cyan">SUPER_ADMIN</div>
+              <p class="text-xs text-muted mt-1">Full system authority, admin role assignment, and infrastructure settings.</p>
+            </div>
+            <div class="rbac-card">
+              <div class="font-semibold text-xs text-success">ADMIN</div>
+              <p class="text-xs text-muted mt-1">Complete catalog publishing, user management, and broadcast authority.</p>
+            </div>
+            <div class="rbac-card">
+              <div class="font-semibold text-xs text-warning">CONTENT_MANAGER</div>
+              <p class="text-xs text-muted mt-1">Wallpaper creation, media uploads, categories, and tag curation.</p>
+            </div>
+            <div class="rbac-card">
+              <div class="font-semibold text-xs text-danger">MODERATOR</div>
+              <p class="text-xs text-muted mt-1">Moderation queue review, resolution, and wallpaper status suspension.</p>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Admin Email</th>
+                  <th>Assigned Role</th>
+                  <th>Status</th>
+                  <th>Display Name</th>
+                  <th>Created Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-table-body">
+                <!-- Injected via app.js -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 14. SETTINGS & SYSTEM HEALTH VIEW -->
+        <!-- ======================================================= -->
+        <section id="section-settings" class="admin-section">
+          <div class="section-header">
+            <div>
+              <h1 class="section-title">Settings & System Health</h1>
+              <p class="section-subtitle">Real-time status of backend services, storage providers, and administrative session</p>
+            </div>
+          </div>
+
+          <div class="dashboard-columns">
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Backend Connectivity</h3>
+              </div>
+              <div class="panel-body">
+                <div class="diagnostics-row">
+                  <div class="diag-item">
+                    <span class="diag-label">Supabase Endpoint</span>
+                    <span id="settings-supabase-url" class="diag-val text-xs truncate">https://twzrtrbbsehvlabupygl.supabase.co</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Database Connection Status</span>
+                    <span id="settings-db-status" class="diag-val text-success font-semibold">● Connected</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Cloudflare R2 Public Domain</span>
+                    <span id="settings-r2-domain" class="diag-val text-xs truncate">pub-f6c5306834354d76808cad8fbb4e44cd.r2.dev</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Presign Edge Function</span>
+                    <span id="settings-edge-status" class="diag-val text-success font-semibold">● Operational (admin-media-presign)</span>
+                  </div>
+                </div>
+                <div class="mt-3 flex gap-2 flex-wrap">
+                  <button id="btn-test-backend-conn" class="btn btn-secondary btn-sm">Test Backend Health</button>
+                  <button id="btn-flush-local-cache" class="btn btn-secondary btn-sm">Re-sync Remote Data</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Active Admin Session</h3>
+              </div>
+              <div class="panel-body">
+                <div class="diagnostics-row">
+                  <div class="diag-item">
+                    <span class="diag-label">Admin Email</span>
+                    <span id="settings-admin-email" class="diag-val font-semibold">mahiyadinesh777@gmail.com</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Assigned Role</span>
+                    <span id="settings-admin-role" class="diag-val text-cyan font-semibold">SUPER_ADMIN</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Admin UUID</span>
+                    <span id="settings-admin-uuid" class="diag-val text-xs text-muted font-mono">4ebff349-81dd-429a-b9b4-3d0248117592</span>
+                  </div>
+                  <div class="diag-item">
+                    <span class="diag-label">Session Security</span>
+                    <span class="diag-val text-success font-semibold">Authoritative RBAC Verified</span>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <button id="btn-settings-signout" class="btn btn-danger btn-sm">Sign Out of Admin Portal</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- DEDICATED VIRTUAL PHONE SIMULATOR MODAL -->
+    <!-- ======================================================= -->
+    <div id="simulator-modal" class="modal-overlay hidden">
+      <div class="modal-dialog simulator-dialog">
+        <div class="modal-header">
+          <div class="flex items-center gap-2">
+            <h3 class="modal-title">In-Browser Virtual Simulator</h3>
+            <span id="preview-state-badge" class="pill-badge pill-cyan">STATE: HOME</span>
+          </div>
+          <button id="btn-simulator-close" class="icon-btn" aria-label="Close Simulator">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body simulator-modal-body">
+          <!-- PHONE CHASSIS -->
+          <div class="phone-simulator-frame">
+            <div class="phone-camera-notch"></div>
+            <div class="phone-screen-viewport">
+              <video id="sim-video-player" playsinline muted autoplay loop class="sim-video"></video>
+              <img id="sim-static-image" class="sim-image hidden" alt="Static Wallpaper Preview">
+              <div id="sim-watermark" class="sim-overlay">
+                <div class="sim-clock">10:45</div>
+                <div class="sim-date">Thursday, August 28</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- INTERACTIVE CONTROLS -->
+          <div class="simulator-controls">
+            <div class="sim-control-title">Content-Driven State Triggers</div>
+            <div class="sim-buttons-grid">
+              <button id="sim-btn-home" class="btn btn-secondary btn-sm active">Home</button>
+              <button id="sim-btn-lock" class="btn btn-secondary btn-sm">Lock</button>
+              <button id="sim-btn-lock-home" class="btn btn-secondary btn-sm">Lock → Home</button>
+              <button id="sim-btn-home-lock" class="btn btn-secondary btn-sm">Home → Lock</button>
+              <button id="sim-btn-home-charging" class="btn btn-secondary btn-sm">Charge from Home</button>
+              <button id="sim-btn-lock-charging" class="btn btn-secondary btn-sm">Charge from Lock</button>
+              <button id="sim-btn-charging-loop" class="btn btn-secondary btn-sm">Charging Loop</button>
+              <button id="sim-btn-charging-home" class="btn btn-secondary btn-sm">Unplug to Home</button>
+              <button id="sim-btn-charging-lock" class="btn btn-secondary btn-sm">Unplug to Lock</button>
+            </div>
+            
+            <div class="sim-audio-switch mt-3 flex-between">
+              <label class="switch-control switch-xs">
+                <input type="checkbox" id="sim-audio-toggle">
+                <span class="switch-slider"></span>
+                <span class="switch-label font-medium">Simulate Sound ON</span>
+              </label>
+              <span id="sim-audio-hint" class="text-xs text-muted">Muted when sound is OFF</span>
+            </div>
+            <p class="text-xs text-muted mt-2">Simulates live wallpaper state machine locally without modifying device wallpaper.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UNIVERSAL MODAL DIALOG CONTAINER -->
+    <div id="modal-container" class="modal-overlay hidden">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 id="modal-title" class="modal-title">Dialog Title</h3>
+          <button id="btn-modal-close" class="icon-btn" aria-label="Close Dialog"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+        <div id="modal-footer" class="modal-footer"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
