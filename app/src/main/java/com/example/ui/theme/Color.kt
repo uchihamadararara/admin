@@ -2,26 +2,39 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val CyanPrimary = Color(0xFF00D2FF)
-val SkyAccent = Color(0xFF38BDF8)
-val BlueSecondary = Color(0xFF3B82F6)
-val IndigoTertiary = Color(0xFF6366F1)
+// Obsidian & Champagne Luxury Theme
+val ObsidianCanvas = Color(0xFF0F1115)
+val ObsidianSurface = Color(0xFF16191E)
+val ObsidianSurfaceElevated = Color(0xFF1E222A)
+val ObsidianBorder = Color(0xFF2B303B)
+val ObsidianBorderSubtle = Color(0xFF212630)
 
-val DarkBg = Color(0xFF07090E)
-val DarkSurface = Color(0xFF0E131F)
-val DarkCard = Color(0xFF131A29)
-val CardElevated = Color(0xFF1A2234)
-val SurfaceHighlight = Color(0xFF243048)
-val BorderSubtle = Color(0xFF1E293B)
-val TextPrimary = Color(0xFFF8FAFC)
-val TextSecondary = Color(0xFF94A3B8)
-val TextMuted = Color(0xFF64748B)
+val ChampagneGold = Color(0xFFD4AF37)
+val ChampagneGoldLight = Color(0xFFE5C866)
+val ChampagneGoldDark = Color(0xFFA6841C)
+val ChampagneGoldSubtle = Color(0x26D4AF37)
 
-val StatusSuccess = Color(0xFF10B981)
-val StatusWarning = Color(0xFFF59E0B)
-val StatusDanger = Color(0xFFEF4444)
-val StatusPurple = Color(0xFFA855F7)
-val RoleBadgeBg = Color(0xFF082F49)
-val RoleBadgeBorder = Color(0xFF0284C7)
+val TextPrimaryDark = Color(0xFFF1F3F5)
+val TextSecondaryDark = Color(0xFF9EABB8)
+val TextMutedDark = Color(0xFF636E7B)
 
+// Status & Functional Accents
+val StatusSuccessDark = Color(0xFF2ECC71)
+val StatusSuccessBgDark = Color(0x1F2ECC71)
+val StatusWarningDark = Color(0xFFF39C12)
+val StatusWarningBgDark = Color(0x1FF39C12)
+val StatusDangerDark = Color(0xFFE74C3C)
+val StatusDangerBgDark = Color(0x1FE74C3C)
+val StatusInfoDark = Color(0xFF3498DB)
+val StatusInfoBgDark = Color(0x1F3498DB)
 
+// Light Mode Counterparts
+val LightCanvas = Color(0xFFF8F9FA)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceElevated = Color(0xFFF1F3F5)
+val LightBorder = Color(0xFFE2E6EA)
+val LightBorderSubtle = Color(0xFFEDF0F2)
+
+val TextPrimaryLight = Color(0xFF1A1D20)
+val TextSecondaryLight = Color(0xFF5A6472)
+val TextMutedLight = Color(0xFF8C96A3)

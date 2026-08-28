@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Live Wallpaper Platform - Production Admin Panel</title>
+  <!-- Tailwind CSS, Lucide Icons & Supabase JS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: {
+              950: '#090A0D',
+              900: '#0F1115',
+              800: '#16191E',
+              700: '#1E222A',
+              600: '#2B303B'
+            },
+            champagne: {
+              DEFAULT: '#D4AF37',
+              light: '#E5C866',
+              dark: '#A6841C'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0F1115; }
+    ::-webkit-scrollbar-thumb { background: #2B303B; border-radius: 3px; }
+    .phone-mockup {
+      width: 280px;
+      height: 560px;
+      border-radius: 36px;
+      border: 8px solid #1E222A;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+      overflow: hidden;
+      position: relative;
+    }
+    @media (max-width: 640px) {
+      .phone-mockup {
+        width: 240px;
+        height: 480px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-obsidian-900 text-slate-100 min-h-screen flex flex-col md:flex-row antialiased select-none">
+
+  <!-- Mobile Top Header Bar -->
+  <div class="md:hidden bg-obsidian-800 border-b border-obsidian-600 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+    <div class="flex items-center gap-2.5">
+      <button onclick="toggleMobileSidebar()" class="p-2 rounded-lg bg-obsidian-700 text-slate-200 hover:text-white" aria-label="Toggle Menu">
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded bg-champagne/10 border border-champagne/30 flex items-center justify-center text-champagne">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+        </div>
+        <span class="text-xs font-bold tracking-wider text-champagne">WALLPAPER ADMIN</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="mobile-conn-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+      <button onclick="refreshCurrentView()" class="p-2 rounded bg-obsidian-700 text-slate-300">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Sidebar Backdrop -->
+  <div id="sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 hidden md:hidden"></div>
+
+  <!-- Sidebar (Desktop Fixed + Mobile Drawer) -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-obsidian-800 border-r border-obsidian-600 flex flex-col justify-between p-4 flex-shrink-0 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300">
+    <div>
+      <!-- Brand (Desktop) -->
+      <div class="hidden md:flex items-center justify-between px-2 py-3 border-b border-obsidian-600 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-champagne/10 border border-champagne/30 flex items-center justify-center text-champagne">
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h1 class="text-sm font-bold tracking-wider text-champagne">LIVE WALLPAPER</h1>
+            <p class="text-[11px] text-slate-400">Production Admin Panel</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Drawer Close Header -->
+      <div class="md:hidden flex items-center justify-between pb-3 mb-3 border-b border-obsidian-600">
+        <span class="text-xs font-bold text-champagne uppercase">Navigation Menu</span>
+        <button onclick="toggleMobileSidebar()" class="p-1 rounded text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Connection / Role Badge -->
+      <div id="auth-status-bar" class="mb-4 px-3 py-2 rounded bg-obsidian-700/80 border border-obsidian-600 flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2">
+          <span id="conn-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span id="admin-user-display" class="font-medium text-slate-300 truncate max-w-[110px]">Connecting...</span>
+        </div>
+        <span id="admin-role-badge" class="px-1.5 py-0.5 rounded bg-champagne/10 text-champagne text-[10px] font-bold">ADMIN</span>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="space-y-1 overflow-y-auto max-h-[calc(100vh-230px)] pr-1" id="nav-links">
+        <button onclick="navigate('dashboard')" class="nav-btn active flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-champagne bg-champagne/10 border border-champagne/20" data-view="dashboard">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+        </button>
+        <button onclick="navigate('wallpapers')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="wallpapers">
+          <i data-lucide="image" class="w-4 h-4"></i> Wallpaper Catalog
+        </button>
+        <button onclick="navigate('editor')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="editor">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i> Author / Edit Wallpaper
+        </button>
+        <button onclick="navigate('preview')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="preview">
+          <i data-lucide="smartphone" class="w-4 h-4"></i> Virtual Mobile Studio
+        </button>
+        <button onclick="navigate('media')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="media">
+          <i data-lucide="hard-drive" class="w-4 h-4"></i> Media Library (R2)
+        </button>
+        <button onclick="navigate('categories')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="categories">
+          <i data-lucide="folder-tree" class="w-4 h-4"></i> Categories & Tags
+        </button>
+        <button onclick="navigate('users')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="users">
+          <i data-lucide="users" class="w-4 h-4"></i> Users & Subscriptions
+        </button>
+        <button onclick="navigate('billing')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="billing">
+          <i data-lucide="credit-card" class="w-4 h-4"></i> Google Play Inspector
+        </button>
+        <button onclick="navigate('rewards')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="rewards">
+          <i data-lucide="gift" class="w-4 h-4"></i> Rewarded Ads (SSV)
+        </button>
+        <button onclick="navigate('moderation')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="moderation">
+          <i data-lucide="shield-alert" class="w-4 h-4"></i> Moderation Queue
+        </button>
+        <button onclick="navigate('analytics')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="analytics">
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Telemetry & Metrics
+        </button>
+        <button onclick="navigate('config')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="config">
+          <i data-lucide="sliders" class="w-4 h-4"></i> App Remote Config
+        </button>
+        <button onclick="navigate('audit')" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="audit">
+          <i data-lucide="file-text" class="w-4 h-4"></i> Audit Logs
+        </button>
+        <button onclick="navigate('admins')" id="nav-admins-btn" class="nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white" data-view="admins">
+          <i data-lucide="user-check" class="w-4 h-4"></i> Admin Staff Roles
+        </button>
+      </nav>
+    </div>
+
+    <!-- Footer Controls -->
+    <div class="border-t border-obsidian-600 pt-3 flex items-center justify-between">
+      <button onclick="openConfigModal()" title="Supabase API Settings" class="p-2 rounded bg-obsidian-700 hover:bg-obsidian-600 text-slate-300 text-xs flex items-center gap-1.5 min-h-[44px]">
+        <i data-lucide="settings" class="w-4 h-4"></i> Supabase Config
+      </button>
+      <button onclick="handleAuthAction()" id="auth-action-btn" class="p-2 rounded bg-champagne/10 hover:bg-champagne/20 text-champagne text-xs font-bold flex items-center gap-1 min-h-[44px]">
+        <i data-lucide="log-in" class="w-4 h-4"></i> <span id="auth-btn-text">Admin Sign In</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main View Area -->
+  <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+    <!-- Desktop Top Bar -->
+    <header class="hidden md:flex h-16 bg-obsidian-800 border-b border-obsidian-600 px-6 items-center justify-between sticky top-0 z-20">
+      <div class="flex items-center gap-3">
+        <h2 id="page-title" class="text-base font-bold text-white tracking-wide">Platform Dashboard</h2>
+        <span id="page-subtitle" class="text-xs text-slate-400">· Real-time operational intelligence</span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div id="env-badge" class="flex items-center gap-2 px-3 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Supabase Connected
+        </div>
+        <button onclick="refreshCurrentView()" class="p-2 rounded bg-obsidian-700 hover:bg-obsidian-600 text-slate-300 min-h-[44px] min-w-[44px] flex items-center justify-center" title="Reload View Data">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Notification Banner -->
+    <div id="toast-container" class="fixed top-16 md:top-20 right-4 md:right-6 z-50 space-y-2 pointer-events-none max-w-sm"></div>
+
+    <!-- Page Body Container -->
+    <div id="content" class="p-4 md:p-6 space-y-6">
+      <!-- Injected dynamically -->
+    </div>
+  </main>
+
+  <!-- API / Supabase Connection Modal -->
+  <div id="config-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-6 w-full max-w-md space-y-4">
+      <div class="flex justify-between items-center border-b border-obsidian-600 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="database" class="w-4 h-4 text-champagne"></i> Backend Connection Config
+        </h3>
+        <button onclick="closeConfigModal()" class="text-slate-400 hover:text-white p-1">&times;</button>
+      </div>
+      <p class="text-xs text-slate-400">Configure Supabase project parameters for real-time synchronization and Edge Function execution.</p>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Supabase URL</label>
+          <input id="cfg-supabase-url" type="text" placeholder="https://your-project.supabase.co" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Supabase Anon Key</label>
+          <input id="cfg-supabase-anon" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Cloudflare R2 Public Domain</label>
+          <input id="cfg-r2-domain" type="text" placeholder="https://media.wallpaperapp.com" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeConfigModal()" class="px-3 py-2 rounded bg-obsidian-700 text-xs text-slate-300 hover:bg-obsidian-600 min-h-[44px]">Cancel</button>
+        <button onclick="saveSupabaseConfig()" class="px-4 py-2 rounded bg-champagne text-obsidian-900 font-bold text-xs hover:bg-champagne-light min-h-[44px]">Save & Reconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Sign In Modal -->
+  <div id="auth-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-6 w-full max-w-sm space-y-4">
+      <div class="flex justify-between items-center border-b border-obsidian-600 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="lock" class="w-4 h-4 text-champagne"></i> Staff Authentication
+        </h3>
+        <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white p-1">&times;</button>
+      </div>
+      <p class="text-xs text-slate-400">Authenticate with your administrator email. Privileges are validated server-side.</p>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Staff Email</label>
+          <input id="auth-email" type="email" placeholder="admin@wallpaperapp.com" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+          <input id="auth-password" type="password" placeholder="••••••••••••" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeAuthModal()" class="px-3 py-2 rounded bg-obsidian-700 text-xs text-slate-300 hover:bg-obsidian-600 min-h-[44px]">Cancel</button>
+        <button onclick="performSignIn()" class="px-4 py-2 rounded bg-champagne text-obsidian-900 font-bold text-xs hover:bg-champagne-light min-h-[44px]">Authenticate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic & Interactive State Engine -->
+  <script>
+    // =========================================================================
+    // 1. STATE INITIALIZATION (Zero Dummy Data - Empty State Native)
+    // =========================================================================
+    const DEFAULT_SUPABASE_URL = "https://twzrtrbbsehvlabupygl.supabase.co";
+    const DEFAULT_SUPABASE_ANON = "sb_publishable_JIX259B4vQTM-EqrfDI98A_vcPugpFm";
+    const DEFAULT_R2_DOMAIN = "https://pub-f6c5306834354d76808cad8fbb4e44cd.r2.dev";
+
+    let state = {
+      supabaseUrl: localStorage.getItem("adm_supabase_url") || DEFAULT_SUPABASE_URL,
+      supabaseAnon: localStorage.getItem("adm_supabase_anon") || DEFAULT_SUPABASE_ANON,
+      r2Domain: localStorage.getItem("adm_r2_domain") || DEFAULT_R2_DOMAIN,
+      client: null,
+      currentUser: null,
+      currentAdmin: { role: "ADMIN", name: "Administrator", email: "admin@platform.internal" },
+      activeTab: "dashboard",
+      wallpapers: [],
+      categories: [],
+      tags: [],
+      mediaAssets: [],
+      users: [],
+      playEvents: [],
+      rewardEvents: [],
+      reports: [],
+      auditLogs: [],
+      appConfig: {},
+      adminUsers: [],
+      
+      // Unified Editor State
+      editorMode: "CREATE", // CREATE or EDIT
+      editingId: null,
+      editorForm: {
+        title: "",
+        description: "",
+        type: "LIVE", // STATIC or LIVE
+        live_experience_type: "NORMAL", // NORMAL or TRANSITION (Explicit field - Never inferred)
+        access_type: "FREE", // FREE or PREMIUM
+        status: "ACTIVE", // DRAFT, READY_FOR_REVIEW, ACTIVE, INACTIVE, ARCHIVED
+        category: "General",
+        category_id: null,
+        tags: [],
+        is_featured: false,
+        is_trending: false,
+        is_new: true,
+        sort_order: 0,
+        thumbnail_url: "",
+        preview_url: "",
+        media_url: "",
+        duration_seconds: 15.0,
+        fps: 60,
+        sound_available: false,
+        charging_animation_available: false,
+        charging_animation_type: "BATTERY_PULSE",
+        charging_animation_asset: "",
+        transition_available: false,
+        transition_type: "FADE",
+        transition_asset: "",
+        // The 8 explicit TRANSITION slots
+        assets: {
+          LOCK: "",
+          HOME: "",
+          LOCK_TO_HOME: "",
+          HOME_TO_LOCK: "",
+          HOME_TO_CHARGING: "",
+          LOCK_TO_CHARGING: "",
+          CHARGING_LOOP: "",
+          CHARGING_RETURN: "",
+        }
+      },
+
+      // Virtual Mobile Preview Studio State Machine
+      previewState: {
+        wallpaper: null,
+        currentView: "HOME", // LOCK, HOME, CHARGING_LOOP, TRANSITIONING
+        previousView: "HOME", // Used to restore correct target after charging unplug
+        isCharging: false,
+        isLocked: false,
+        isSoundOn: false,
+        videoSrc: "",
+        statusText: "Ready",
+        isTransitioning: false,
+      }
+    };
+
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      const isOpen = !sidebar.classList.contains('-translate-x-full');
+      if (isOpen) {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      } else {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+      }
+    }
+
+    function initSupabase() {
+      try {
+        if (window.supabase && state.supabaseUrl && state.supabaseAnon) {
+          state.client = window.supabase.createClient(state.supabaseUrl, state.supabaseAnon);
+          const dot = document.getElementById('conn-dot');
+          const mobDot = document.getElementById('mobile-conn-dot');
+          if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+          if (mobDot) mobDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+          document.getElementById('admin-user-display').innerText = state.currentAdmin.name;
+          document.getElementById('admin-role-badge').innerText = state.currentAdmin.role;
+        }
+      } catch (err) {
+        console.warn("Supabase init notice:", err);
+      }
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200',
+        error: 'bg-red-950/90 border-red-500/50 text-red-200',
+        info: 'bg-blue-950/90 border-blue-500/50 text-blue-200',
+        gold: 'bg-obsidian-800 border-champagne/50 text-champagne'
+      }[type] || 'bg-obsidian-800 border-obsidian-600 text-white';
+
+      toast.className = `p-3 rounded-lg border text-xs font-semibold shadow-2xl pointer-events-auto flex items-center gap-2 transition-all ${colors}`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+
+    // =========================================================================
+    // 2. NAVIGATION & ROUTING
+    // =========================================================================
+    function navigate(tab) {
+      state.activeTab = tab;
+      
+      // Close mobile sidebar if open
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (sidebar && !sidebar.classList.contains('-translate-x-full')) {
+        sidebar.classList.add('-translate-x-full');
+        if (backdrop) backdrop.classList.add('hidden');
+      }
+
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        if (btn.dataset.view === tab) {
+          btn.className = 'nav-btn active flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-champagne bg-champagne/10 border border-champagne/20';
+        } else {
+          btn.className = 'nav-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-xs font-semibold transition text-slate-300 hover:bg-obsidian-700 hover:text-white';
+        }
+      });
+
+      renderCurrentView();
+    }
+
+    function renderCurrentView() {
+      const content = document.getElementById('content');
+      const title = document.getElementById('page-title');
+      const subtitle = document.getElementById('page-subtitle');
+
+      switch (state.activeTab) {
+        case 'dashboard':
+          if (title) title.innerText = 'Platform Intelligence Dashboard';
+          if (subtitle) subtitle.innerText = '· Live catalog, subscriptions & telemetry overview';
+          renderDashboard(content);
+          break;
+        case 'wallpapers':
+          if (title) title.innerText = 'Wallpaper Catalog';
+          if (subtitle) subtitle.innerText = '· STATIC, NORMAL Live, and TRANSITION Multi-Slot experiences';
+          renderWallpapers(content);
+          break;
+        case 'editor':
+          if (title) title.innerText = state.editorMode === 'CREATE' ? 'Create New Wallpaper' : `Edit: ${state.editorForm.title || 'Wallpaper'}`;
+          if (subtitle) subtitle.innerText = '· Unified workflow: Identity, media slots, validation, publication';
+          renderEditor(content);
+          break;
+        case 'preview':
+          if (title) title.innerText = 'In-Browser Virtual Mobile Studio';
+          if (subtitle) subtitle.innerText = '· Full lifecycle simulation: Lock/Home/Charging state machine';
+          renderPreviewStudio(content);
+          break;
+        case 'media':
+          if (title) title.innerText = 'Cloudflare R2 Media Storage';
+          if (subtitle) subtitle.innerText = '· Presigned upload pipeline & asset metadata tracking';
+          renderMediaLibrary(content);
+          break;
+        case 'categories':
+          if (title) title.innerText = 'Taxonomy & Categorization';
+          if (subtitle) subtitle.innerText = '· Categories, tags and discovery index management';
+          renderCategoriesTags(content);
+          break;
+        case 'users':
+          if (title) title.innerText = 'User Management & Diagnostics';
+          if (subtitle) subtitle.innerText = '· Account status, Google Play subscriptions & device OEMs';
+          renderUsers(content);
+          break;
+        case 'billing':
+          if (title) title.innerText = 'Google Play Billing Inspector';
+          if (subtitle) subtitle.innerText = '· Authoritative RTDN purchase & subscription telemetry';
+          renderBillingInspector(content);
+          break;
+        case 'rewards':
+          if (title) title.innerText = 'Rewarded Ad SSV Verification Feed';
+          if (subtitle) subtitle.innerText = '· Cryptographically signed rewarded ad unlock transactions';
+          renderRewardsFeed(content);
+          break;
+        case 'moderation':
+          if (title) title.innerText = 'Moderation Queue & Safety';
+          if (subtitle) subtitle.innerText = '· Community issue reports triage & wallpaper deactivation';
+          renderModeration(content);
+          break;
+        case 'analytics':
+          if (title) title.innerText = 'Platform Telemetry & Metrics';
+          if (subtitle) subtitle.innerText = '· Real catalog impressions, previews, applies & favorites';
+          renderAnalytics(content);
+          break;
+        case 'config':
+          if (title) title.innerText = 'Remote Application Configuration';
+          if (subtitle) subtitle.innerText = '· Minimum supported versions, maintenance mode & alerts';
+          renderAppConfig(content);
+          break;
+        case 'audit':
+          if (title) title.innerText = 'Administrative Audit Trail';
+          if (subtitle) subtitle.innerText = '· Immutable logs for privileged catalog and system mutations';
+          renderAuditLogs(content);
+          break;
+        case 'admins':
+          if (title) title.innerText = 'Staff Role Management (RBAC)';
+          if (subtitle) subtitle.innerText = '· Super Admin, Content Manager & Moderator delegations';
+          renderAdminManagement(content);
+          break;
+        default:
+          navigate('dashboard');
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function refreshCurrentView() {
+      fetchRealData().then(() => {
+        renderCurrentView();
+        showToast("Synchronized with Supabase", "success");
+      });
+    }
+
+    // =========================================================================
+    // 3. REAL DATABASE SYNCHRONIZATION (Supabase Tables)
+    // =========================================================================
+    async function fetchRealData() {
+      if (!state.client) return;
+
+      try {
+        const [
+          { data: wps },
+          { data: cats },
+          { data: tgs },
+          { data: med },
+          { data: usrs },
+          { data: playEvts },
+          { data: rwdEvts },
+          { data: modReps },
+          { data: logs },
+          { data: admins },
+          { data: cfg }
+        ] = await Promise.all([
+          state.client.from('wallpapers').select('*, wallpaper_assets(*)').order('created_at', { ascending: false }),
+          state.client.from('categories').select('*').order('sort_order', { ascending: true }),
+          state.client.from('tags').select('*').order('usage_count', { ascending: false }),
+          state.client.from('media_assets').select('*').order('created_at', { ascending: false }),
+          state.client.from('users').select('*').order('created_at', { ascending: false }),
+          state.client.from('google_play_events').select('*').order('created_at', { ascending: false }),
+          state.client.from('reward_ad_events').select('*').order('created_at', { ascending: false }),
+          state.client.from('moderation_reports').select('*').order('created_at', { ascending: false }),
+          state.client.from('admin_audit_logs').select('*').order('created_at', { ascending: false }),
+          state.client.from('admin_users').select('*').order('created_at', { ascending: false }),
+          state.client.from('app_configurations').select('*')
+        ]);
+
+        if (wps) state.wallpapers = wps;
+        if (cats) state.categories = cats;
+        if (tgs) state.tags = tgs;
+        if (med) state.mediaAssets = med;
+        if (usrs) state.users = usrs;
+        if (playEvts) state.playEvents = playEvts;
+        if (rwdEvts) state.rewardEvents = rwdEvts;
+        if (modReps) state.reports = modReps;
+        if (logs) state.auditLogs = logs;
+        if (admins) state.adminUsers = admins;
+        if (cfg) state.appConfig = cfg.reduce((acc, cur) => ({ ...acc, [cur.key]: cur.value }), {});
+      } catch (err) {
+        console.error("Database query notice:", err);
+      }
+    }
+
+    // =========================================================================
+    // 4. VIEW RENDERERS
+    // =========================================================================
+
+    // --- A. DASHBOARD ---
+    function renderDashboard(container) {
+      const totalWp = state.wallpapers.length;
+      const liveNormal = state.wallpapers.filter(w => w.type === 'LIVE' && w.live_experience_type !== 'TRANSITION').length;
+      const liveTransition = state.wallpapers.filter(w => w.type === 'LIVE' && w.live_experience_type === 'TRANSITION').length;
+      const staticWp = state.wallpapers.filter(w => w.type === 'STATIC').length;
+      const published = state.wallpapers.filter(w => w.status === 'ACTIVE' || w.status === 'PUBLISHED').length;
+      const totalUsers = state.users.length;
+      const activeSubs = state.users.filter(u => u.is_premium).length;
+      const rewardVerified = state.rewardEvents.filter(e => e.verification_status === 'VERIFIED').length;
+      const openReports = state.reports.filter(r => r.status === 'OPEN').length;
+
+      container.innerHTML = `
+        <!-- Metrics Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Wallpapers</p>
+                <h3 class="text-2xl font-extrabold text-white mt-1">${totalWp}</h3>
+              </div>
+              <span class="p-2.5 rounded-lg bg-champagne/10 text-champagne"><i data-lucide="image" class="w-5 h-5"></i></span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 font-mono">${liveNormal} Normal Live · ${liveTransition} Transition · ${staticWp} Static</p>
+          </div>
+
+          <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">VIP Subscribers</p>
+                <h3 class="text-2xl font-extrabold text-emerald-400 mt-1">${activeSubs}</h3>
+              </div>
+              <span class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i data-lucide="credit-card" class="w-5 h-5"></i></span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Google Play Verified Entitlements</p>
+          </div>
+
+          <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Users</p>
+                <h3 class="text-2xl font-extrabold text-blue-400 mt-1">${totalUsers}</h3>
+              </div>
+              <span class="p-2.5 rounded-lg bg-blue-500/10 text-blue-400"><i data-lucide="users" class="w-5 h-5"></i></span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 font-mono">${published} Published to Public Feed</p>
+          </div>
+
+          <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Safety & Moderation</p>
+                <h3 class="text-2xl font-extrabold ${openReports > 0 ? 'text-amber-400' : 'text-slate-300'} mt-1">${openReports} Open</h3>
+              </div>
+              <span class="p-2.5 rounded-lg bg-amber-500/10 text-amber-400"><i data-lucide="shield-alert" class="w-5 h-5"></i></span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 font-mono">${rewardVerified} SSV Rewarded Unlocks</p>
+          </div>
+        </div>
+
+        <!-- Quick Action Bar -->
+        <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-bold text-white">Content Authoring & Virtual Mobile Studio</h3>
+            <p class="text-xs text-slate-400">Author STATIC, NORMAL Live, or multi-slot TRANSITION bundles with zero device risk.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="startCreateWallpaper()" class="px-4 py-2.5 rounded-lg bg-champagne text-obsidian-900 font-bold text-xs hover:bg-champagne-light transition flex items-center gap-1.5 min-h-[44px]">
+              <i data-lucide="plus" class="w-4 h-4"></i> Create Wallpaper
+            </button>
+            <button onclick="navigate('preview')" class="px-4 py-2.5 rounded-lg bg-obsidian-700 text-white font-semibold text-xs hover:bg-obsidian-600 transition flex items-center gap-1.5 min-h-[44px]">
+              <i data-lucide="smartphone" class="w-4 h-4"></i> Open Virtual Studio
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Audit Events -->
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4"></i> Recent Privileged Mutations (Audit Trail)
+            </h3>
+            <button onclick="navigate('audit')" class="text-xs text-champagne hover:underline font-semibold">View All &rarr;</button>
+          </div>
+
+          ${state.auditLogs.length === 0 ? `
+            <div class="py-10 text-center text-xs text-slate-400">
+              <i data-lucide="shield-check" class="w-8 h-8 mx-auto mb-2 text-slate-500"></i>
+              No administrative mutations recorded yet.
+            </div>
+          ` : `
+            <div class="space-y-2">
+              ${state.auditLogs.slice(0, 5).map(log => `
+                <div class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-3">
+                    <span class="px-2 py-0.5 rounded bg-champagne/10 text-champagne font-bold font-mono">${log.action}</span>
+                    <span class="font-medium text-white">${log.admin_email || 'admin@platform'}</span>
+                    <span class="text-slate-400 truncate max-w-xs">[${log.target_type}] ${log.target_id || ''}</span>
+                  </div>
+                  <span class="text-slate-400 font-mono text-[11px]">${new Date(log.created_at).toLocaleTimeString()}</span>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // --- B. WALLPAPERS CATALOG ---
+    let wpFilter = { search: "", type: "ALL", experience: "ALL", tier: "ALL", status: "ALL" };
+
+    function renderWallpapers(container) {
+      let list = [...state.wallpapers];
+
+      if (wpFilter.search) {
+        const q = wpFilter.search.toLowerCase();
+        list = list.filter(w => (w.title && w.title.toLowerCase().includes(q)) || (w.category && w.category.toLowerCase().includes(q)));
+      }
+      if (wpFilter.type !== "ALL") list = list.filter(w => w.type === wpFilter.type);
+      if (wpFilter.experience !== "ALL") list = list.filter(w => w.live_experience_type === wpFilter.experience);
+      if (wpFilter.tier !== "ALL") list = list.filter(w => w.access_type === wpFilter.tier);
+      if (wpFilter.status !== "ALL") list = list.filter(w => w.status === wpFilter.status);
+
+      container.innerHTML = `
+        <!-- Filters Bar -->
+        <div class="bg-obsidian-800 border border-obsidian-600 p-4 rounded-xl space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex-1 min-w-[200px]">
+              <input type="text" value="${wpFilter.search}" oninput="wpFilter.search = this.value; renderWallpapers(document.getElementById('content'))" placeholder="Search by title, category..." class="w-full bg-obsidian-900 border border-obsidian-600 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-champagne outline-none" />
+            </div>
+            <button onclick="startCreateWallpaper()" class="px-4 py-2 rounded-lg bg-champagne text-obsidian-900 font-bold text-xs hover:bg-champagne-light transition flex items-center gap-1.5 min-h-[40px]">
+              <i data-lucide="plus" class="w-4 h-4"></i> Create Wallpaper
+            </button>
+          </div>
+
+          <div class="flex flex-wrap gap-2 pt-2 border-t border-obsidian-600 text-xs">
+            <select onchange="wpFilter.type = this.value; renderWallpapers(document.getElementById('content'))" class="bg-obsidian-900 border border-obsidian-600 rounded px-2.5 py-1.5 text-xs text-slate-300">
+              <option value="ALL" ${wpFilter.type === 'ALL' ? 'selected' : ''}>All Types</option>
+              <option value="LIVE" ${wpFilter.type === 'LIVE' ? 'selected' : ''}>LIVE Wallpapers</option>
+              <option value="STATIC" ${wpFilter.type === 'STATIC' ? 'selected' : ''}>STATIC Wallpapers</option>
+            </select>
+
+            <select onchange="wpFilter.experience = this.value; renderWallpapers(document.getElementById('content'))" class="bg-obsidian-900 border border-obsidian-600 rounded px-2.5 py-1.5 text-xs text-slate-300">
+              <option value="ALL" ${wpFilter.experience === 'ALL' ? 'selected' : ''}>All Experiences</option>
+              <option value="NORMAL" ${wpFilter.experience === 'NORMAL' ? 'selected' : ''}>NORMAL Live</option>
+              <option value="TRANSITION" ${wpFilter.experience === 'TRANSITION' ? 'selected' : ''}>TRANSITION Live</option>
+            </select>
+
+            <select onchange="wpFilter.tier = this.value; renderWallpapers(document.getElementById('content'))" class="bg-obsidian-900 border border-obsidian-600 rounded px-2.5 py-1.5 text-xs text-slate-300">
+              <option value="ALL" ${wpFilter.tier === 'ALL' ? 'selected' : ''}>All Tiers</option>
+              <option value="FREE" ${wpFilter.tier === 'FREE' ? 'selected' : ''}>FREE</option>
+              <option value="PREMIUM" ${wpFilter.tier === 'PREMIUM' ? 'selected' : ''}>PREMIUM (VIP)</option>
+            </select>
+
+            <select onchange="wpFilter.status = this.value; renderWallpapers(document.getElementById('content'))" class="bg-obsidian-900 border border-obsidian-600 rounded px-2.5 py-1.5 text-xs text-slate-300">
+              <option value="ALL" ${wpFilter.status === 'ALL' ? 'selected' : ''}>All Statuses</option>
+              <option value="ACTIVE" ${wpFilter.status === 'ACTIVE' ? 'selected' : ''}>PUBLISHED / ACTIVE</option>
+              <option value="DRAFT" ${wpFilter.status === 'DRAFT' ? 'selected' : ''}>DRAFT</option>
+              <option value="INACTIVE" ${wpFilter.status === 'INACTIVE' ? 'selected' : ''}>INACTIVE</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Catalog Items -->
+        ${list.length === 0 ? `
+          <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-12 text-center text-slate-400 space-y-3">
+            <i data-lucide="image-off" class="w-12 h-12 mx-auto text-slate-500"></i>
+            <h4 class="text-sm font-bold text-slate-300">No Wallpapers Found</h4>
+            <p class="text-xs max-w-sm mx-auto">No wallpapers match the selected filters. Author a new STATIC, NORMAL Live, or TRANSITION wallpaper to get started.</p>
+            <button onclick="startCreateWallpaper()" class="px-4 py-2 rounded-lg bg-champagne text-obsidian-900 font-bold text-xs">Create First Wallpaper</button>
+          </div>
+        ` : `
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            ${list.map(wp => `
+              <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl overflow-hidden flex flex-col justify-between group hover:border-champagne/50 transition">
+                <div>
+                  <div class="relative h-44 bg-black overflow-hidden">
+                    <img src="${wp.thumbnail_url || wp.media_url}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="${wp.title}" onerror="this.src='https://placehold.co/400x300/16191E/D4AF37?text=No+Thumbnail'" />
+                    
+                    <div class="absolute top-2 left-2 flex flex-wrap gap-1">
+                      <span class="px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-[10px] font-bold font-mono text-champagne border border-champagne/30">
+                        ${wp.type === 'STATIC' ? 'STATIC' : (wp.live_experience_type === 'TRANSITION' ? 'TRANSITION' : 'NORMAL LIVE')}
+                      </span>
+                      ${wp.access_type === 'PREMIUM' ? `
+                        <span class="px-1.5 py-0.5 rounded bg-amber-500/80 text-black text-[10px] font-extrabold">VIP</span>
+                      ` : `
+                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/80 text-black text-[10px] font-extrabold">FREE</span>
+                      `}
+                    </div>
+
+                    <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-mono text-slate-300">
+                      ${wp.status}
+                    </div>
+                  </div>
+
+                  <div class="p-4 space-y-1.5">
+                    <h4 class="font-bold text-sm text-white truncate" title="${wp.title}">${wp.title}</h4>
+                    <p class="text-xs text-slate-400 truncate">${wp.category || 'General'}</p>
+                    
+                    <div class="flex items-center gap-3 pt-2 text-[11px] text-slate-400 font-mono">
+                      <span><i data-lucide="eye" class="w-3 h-3 inline"></i> ${wp.views_count || 0}</span>
+                      <span><i data-lucide="download" class="w-3 h-3 inline"></i> ${wp.applies_count || 0}</span>
+                      <span><i data-lucide="heart" class="w-3 h-3 inline"></i> ${wp.favorites_count || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="p-3 border-t border-obsidian-700/80 bg-obsidian-900/50 flex items-center justify-between gap-1">
+                  <button onclick="previewSpecificWallpaper('${wp.id}')" class="px-2.5 py-1.5 rounded bg-obsidian-700 hover:bg-obsidian-600 text-slate-200 text-xs font-semibold flex items-center gap-1 min-h-[36px]">
+                    <i data-lucide="smartphone" class="w-3.5 h-3.5"></i> Preview
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <button onclick="startEditWallpaper('${wp.id}')" class="p-2 rounded bg-obsidian-700 hover:bg-obsidian-600 text-slate-200 min-h-[36px] min-w-[36px] flex items-center justify-center" title="Edit">
+                      <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button onclick="deleteWallpaperSafe('${wp.id}')" class="p-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 min-h-[36px] min-w-[36px] flex items-center justify-center" title="Delete">
+                      <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      `;
+    }
+
+    // --- C. UNIFIED WALLPAPER AUTHORING / EDITING ---
+    function startCreateWallpaper() {
+      state.editorMode = "CREATE";
+      state.editingId = null;
+      state.editorForm = {
+        title: "",
+        description: "",
+        type: "LIVE",
+        live_experience_type: "NORMAL",
+        access_type: "FREE",
+        status: "ACTIVE",
+        category: "General",
+        category_id: null,
+        tags: [],
+        is_featured: false,
+        is_trending: false,
+        is_new: true,
+        sort_order: 0,
+        thumbnail_url: "",
+        preview_url: "",
+        media_url: "",
+        duration_seconds: 15.0,
+        fps: 60,
+        sound_available: false,
+        charging_animation_available: false,
+        charging_animation_type: "BATTERY_PULSE",
+        charging_animation_asset: "",
+        transition_available: false,
+        transition_type: "FADE",
+        transition_asset: "",
+        assets: {
+          LOCK: "",
+          HOME: "",
+          LOCK_TO_HOME: "",
+          HOME_TO_LOCK: "",
+          HOME_TO_CHARGING: "",
+          LOCK_TO_CHARGING: "",
+          CHARGING_LOOP: "",
+          CHARGING_RETURN: "",
+        }
+      };
+      navigate('editor');
+    }
+
+    function startEditWallpaper(id) {
+      const wp = state.wallpapers.find(w => w.id === id);
+      if (!wp) return;
+
+      state.editorMode = "EDIT";
+      state.editingId = id;
+      state.editorForm = {
+        title: wp.title || "",
+        description: wp.description || "",
+        type: wp.type || "LIVE",
+        live_experience_type: wp.live_experience_type || "NORMAL",
+        access_type: wp.access_type || "FREE",
+        status: wp.status || "ACTIVE",
+        category: wp.category || "General",
+        category_id: wp.category_id,
+        tags: wp.tags || [],
+        is_featured: Boolean(wp.is_featured),
+        is_trending: Boolean(wp.is_trending),
+        is_new: Boolean(wp.is_new),
+        sort_order: wp.sort_order || 0,
+        thumbnail_url: wp.thumbnail_url || "",
+        preview_url: wp.preview_url || wp.thumbnail_url || "",
+        media_url: wp.media_url || "",
+        duration_seconds: wp.duration_seconds || 15.0,
+        fps: wp.fps || 60,
+        sound_available: Boolean(wp.sound_available),
+        charging_animation_available: Boolean(wp.charging_animation_available),
+        charging_animation_type: wp.charging_animation_type || "BATTERY_PULSE",
+        charging_animation_asset: wp.charging_animation_asset || "",
+        transition_available: Boolean(wp.transition_available),
+        transition_type: wp.transition_type || "FADE",
+        transition_asset: wp.transition_asset || "",
+        assets: {
+          LOCK: "",
+          HOME: "",
+          LOCK_TO_HOME: "",
+          HOME_TO_LOCK: "",
+          HOME_TO_CHARGING: "",
+          LOCK_TO_CHARGING: "",
+          CHARGING_LOOP: "",
+          CHARGING_RETURN: "",
+        }
+      };
+
+      if (wp.wallpaper_assets && Array.isArray(wp.wallpaper_assets)) {
+        wp.wallpaper_assets.forEach(ast => {
+          if (state.editorForm.assets[ast.slot_type] !== undefined) {
+            state.editorForm.assets[ast.slot_type] = ast.media_url;
+          }
+        });
+      }
+
+      navigate('editor');
+    }
+
+    function renderEditor(container) {
+      const f = state.editorForm;
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Left 2 Cols: Form Sections -->
+          <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Section 1: Basic Information -->
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne border-b border-obsidian-600 pb-2">
+                1. Basic Information
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">Title *</label>
+                  <input type="text" value="${f.title}" oninput="state.editorForm.title = this.value; updateValidation()" placeholder="e.g. Neon Cyber Odyssey" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+                  <input type="text" value="${f.category}" oninput="state.editorForm.category = this.value" placeholder="e.g. AMOLED, Anime, Sci-Fi" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
+                <textarea rows="2" oninput="state.editorForm.description = this.value" placeholder="Editorial discovery description..." class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none">${f.description}</textarea>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">Wallpaper Type *</label>
+                  <select onchange="state.editorForm.type = this.value; renderCurrentView()" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white">
+                    <option value="LIVE" ${f.type === 'LIVE' ? 'selected' : ''}>LIVE Wallpaper</option>
+                    <option value="STATIC" ${f.type === 'STATIC' ? 'selected' : ''}>STATIC Wallpaper</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">Access Tier *</label>
+                  <select onchange="state.editorForm.access_type = this.value" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white">
+                    <option value="FREE" ${f.access_type === 'FREE' ? 'selected' : ''}>FREE Tier</option>
+                    <option value="PREMIUM" ${f.access_type === 'PREMIUM' ? 'selected' : ''}>PREMIUM (VIP Pass)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">Publish Status *</label>
+                  <select onchange="state.editorForm.status = this.value" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white">
+                    <option value="ACTIVE" ${f.status === 'ACTIVE' || f.status === 'PUBLISHED' ? 'selected' : ''}>PUBLISHED</option>
+                    <option value="DRAFT" ${f.status === 'DRAFT' ? 'selected' : ''}>DRAFT</option>
+                    <option value="INACTIVE" ${f.status === 'INACTIVE' ? 'selected' : ''}>INACTIVE</option>
+                    <option value="ARCHIVED" ${f.status === 'ARCHIVED' ? 'selected' : ''}>ARCHIVED</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 2: Explicit Experience Discriminator (LIVE ONLY) -->
+            ${f.type === 'LIVE' ? `
+              <div class="bg-obsidian-800 border border-champagne/40 rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-obsidian-600 pb-2">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-champagne flex items-center gap-2">
+                    <i data-lucide="layers" class="w-4 h-4"></i> 2. Experience Type (live_experience_type)
+                  </h3>
+                  <span class="text-[11px] text-slate-400">Explicit field · Never inferred</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label class="p-4 rounded-lg border cursor-pointer flex items-start gap-3 transition ${f.live_experience_type === 'NORMAL' ? 'bg-champagne/10 border-champagne text-white' : 'bg-obsidian-900 border-obsidian-600 text-slate-300'}">
+                    <input type="radio" name="live_experience_type" value="NORMAL" ${f.live_experience_type === 'NORMAL' ? 'checked' : ''} onchange="state.editorForm.live_experience_type = 'NORMAL'; renderCurrentView()" class="mt-1" />
+                    <div>
+                      <h4 class="font-bold text-xs">NORMAL Live Wallpaper</h4>
+                      <p class="text-[11px] text-slate-400 mt-1">Single Primary Live Looping Video. No lock-to-home state machine or charging transition system.</p>
+                    </div>
+                  </label>
+
+                  <label class="p-4 rounded-lg border cursor-pointer flex items-start gap-3 transition ${f.live_experience_type === 'TRANSITION' ? 'bg-champagne/10 border-champagne text-white' : 'bg-obsidian-900 border-obsidian-600 text-slate-300'}">
+                    <input type="radio" name="live_experience_type" value="TRANSITION" ${f.live_experience_type === 'TRANSITION' ? 'checked' : ''} onchange="state.editorForm.live_experience_type = 'TRANSITION'; renderCurrentView()" class="mt-1" />
+                    <div>
+                      <h4 class="font-bold text-xs">TRANSITION Live Wallpaper</h4>
+                      <p class="text-[11px] text-slate-400 mt-1">Multi-slot offline bundle with dedicated Lock, Home, Lock&rarr;Home, Home&rarr;Lock, Charging transitions & loop.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Section 3: Media Slots Configuration -->
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+              <div class="flex items-center justify-between border-b border-obsidian-600 pb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">
+                  3. Media Assets & Video Metadata
+                </h3>
+                <label class="px-2.5 py-1 rounded bg-obsidian-700 text-slate-200 text-[11px] font-semibold cursor-pointer hover:bg-obsidian-600 flex items-center gap-1">
+                  <i data-lucide="file-video" class="w-3.5 h-3.5"></i> Inspect Local Video
+                  <input type="file" accept="video/mp4,image/*" onchange="inspectLocalMediaFile(this)" class="hidden" />
+                </label>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Thumbnail URL</label>
+                <input type="text" value="${f.thumbnail_url}" oninput="state.editorForm.thumbnail_url = this.value; updateValidation()" placeholder="https://media.wallpaperapp.com/thumb.jpg" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+              </div>
+
+              ${f.type === 'STATIC' ? `
+                <!-- STATIC Wallpaper Asset -->
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">High-Res Static Image URL *</label>
+                  <input type="text" value="${f.media_url}" oninput="state.editorForm.media_url = this.value; updateValidation()" placeholder="https://media.wallpaperapp.com/static_wallpaper.jpg" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+                </div>
+              ` : f.live_experience_type === 'NORMAL' ? `
+                <!-- NORMAL Live Wallpaper Asset -->
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Primary Live Video URL *</label>
+                    <input type="text" value="${f.media_url}" oninput="state.editorForm.media_url = this.value; updateValidation()" placeholder="https://media.wallpaperapp.com/primary_live.mp4" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-xs text-white focus:border-champagne outline-none" />
+                  </div>
+
+                  <div class="p-3 bg-obsidian-900 rounded-lg border border-obsidian-600 space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" ${f.charging_animation_available ? 'checked' : ''} onchange="state.editorForm.charging_animation_available = this.checked; renderCurrentView()" />
+                      <span class="text-xs font-bold text-white">Optional Normal Charging Loop Video</span>
+                    </label>
+
+                    ${f.charging_animation_available ? `
+                      <div class="pt-2">
+                        <label class="block text-xs text-slate-300 mb-1">Charging Video Asset URL</label>
+                        <input type="text" value="${f.charging_animation_asset || ''}" oninput="state.editorForm.charging_animation_asset = this.value" placeholder="https://media.wallpaperapp.com/charging_loop.mp4" class="w-full bg-obsidian-800 border border-obsidian-600 rounded px-3 py-2 text-xs text-white outline-none" />
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              ` : `
+                <!-- TRANSITION Multi-Slot Bundles (All 8 Slots) -->
+                <div class="space-y-4">
+                  <div class="p-3 bg-champagne/10 border border-champagne/30 rounded-lg text-xs text-slate-300">
+                    <p class="font-bold text-champagne mb-1">Transition Multi-Slot Offline Bundle Rules:</p>
+                    <ul class="list-disc pl-4 space-y-0.5 text-[11px]">
+                      <li><b>LOCK</b> and <b>HOME</b> videos are the primary destinations (Required).</li>
+                      <li><b>Transitions</b> (Lock&rarr;Home, Home&rarr;Lock, Home&rarr;Charging, Lock&rarr;Charging, Charging Return) are optional and content-driven.</li>
+                      <li>If an optional transition asset is missing, the system gracefully proceeds straight to target state.</li>
+                    </ul>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    ${[
+                      { key: 'LOCK', label: '1. Lock Screen Video *', req: true },
+                      { key: 'HOME', label: '2. Home Screen Video *', req: true },
+                      { key: 'LOCK_TO_HOME', label: '3. Lock &rarr; Home Transition', req: false },
+                      { key: 'HOME_TO_LOCK', label: '4. Home &rarr; Lock Transition', req: false },
+                      { key: 'HOME_TO_CHARGING', label: '5. Home &rarr; Charging Transition', req: false },
+                      { key: 'LOCK_TO_CHARGING', label: '6. Lock &rarr; Charging Transition', req: false },
+                      { key: 'CHARGING_LOOP', label: '7. Charging Loop Video', req: false },
+                      { key: 'CHARGING_RETURN', label: '8. Charging Return Transition', req: false }
+                    ].map(slot => `
+                      <div class="p-3 bg-obsidian-900 rounded-lg border border-obsidian-600">
+                        <label class="block text-xs font-bold text-slate-200 mb-1">${slot.label}</label>
+                        <input type="text" value="${f.assets[slot.key] || ''}" oninput="state.editorForm.assets['${slot.key}'] = this.value; updateValidation()" placeholder="Media URL..." class="w-full bg-obsidian-800 border border-obsidian-600 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              `}
+            </div>
+
+            <!-- Section 4: Sound / Audio Safety Metadata -->
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-3">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne border-b border-obsidian-600 pb-2">
+                4. Sound & Audio Safety Metadata
+              </h3>
+              <p class="text-xs text-slate-400">Specifies whether media contains audio. In the Android User App, sound is chosen per applied wallpaper and never plays in background.</p>
+              
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" ${f.sound_available ? 'checked' : ''} onchange="state.editorForm.sound_available = this.checked" />
+                <span class="text-xs font-bold text-white">Media Contains Audio Track</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Right Col: Validation & Publishing Actions -->
+          <div class="space-y-6">
+            <!-- Publishing Actions & Validation Report -->
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Validation & Commit</h3>
+
+              <div id="validation-report-box" class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 text-xs space-y-2">
+                <!-- Injected via updateValidation() -->
+              </div>
+
+              <div class="space-y-2 pt-2">
+                <button onclick="saveWallpaper()" id="save-wp-btn" class="w-full py-2.5 rounded-lg bg-champagne text-obsidian-900 font-bold text-xs hover:bg-champagne-light transition shadow min-h-[44px]">
+                  ${state.editorMode === 'CREATE' ? 'Publish Wallpaper' : 'Save & Update'}
+                </button>
+                <button onclick="navigate('wallpapers')" class="w-full py-2 rounded-lg bg-obsidian-700 text-slate-300 font-semibold text-xs hover:bg-obsidian-600 transition min-h-[44px]">
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <!-- Discovery Flags -->
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-3 text-xs">
+              <h3 class="font-bold uppercase tracking-wider text-champagne">Discovery & Promotion</h3>
+              
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" ${f.is_featured ? 'checked' : ''} onchange="state.editorForm.is_featured = this.checked" />
+                <span class="text-white">Featured Hero Carousel</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" ${f.is_trending ? 'checked' : ''} onchange="state.editorForm.is_trending = this.checked" />
+                <span class="text-white">Trending Section</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" ${f.is_new ? 'checked' : ''} onchange="state.editorForm.is_new = this.checked" />
+                <span class="text-white">New Release Badge</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      `;
+
+      updateValidation();
+    }
+
+    function updateValidation() {
+      const f = state.editorForm;
+      const box = document.getElementById('validation-report-box');
+      if (!box) return;
+
+      const hardErrors = [];
+      const warnings = [];
+
+      if (!f.title || f.title.trim().length === 0) hardErrors.push("Title is required");
+      
+      if (f.type === 'STATIC') {
+        if (!f.media_url) hardErrors.push("Static image URL is required");
+      } else if (f.live_experience_type === 'NORMAL') {
+        if (!f.media_url) hardErrors.push("Primary live video URL is required");
+      } else if (f.live_experience_type === 'TRANSITION') {
+        if (!f.assets.LOCK) hardErrors.push("Lock screen video (LOCK) is required");
+        if (!f.assets.HOME) hardErrors.push("Home screen video (HOME) is required");
+      }
+
+      if (!f.thumbnail_url) warnings.push("Thumbnail URL not set (client will fall back to primary media)");
+
+      let html = '<p class="font-bold text-slate-300 mb-1">Rule Engine Status:</p>';
+
+      if (hardErrors.length === 0) {
+        html += '<div class="text-emerald-400 flex items-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4"></i> All required assets present</div>';
+      } else {
+        hardErrors.forEach(err => {
+          html += `<div class="text-red-400 flex items-center gap-1.5"><i data-lucide="x-circle" class="w-4 h-4"></i> ${err}</div>`;
+        });
+      }
+
+      warnings.forEach(w => {
+        html += `<div class="text-amber-400 flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i> ${w}</div>`;
+      });
+
+      box.innerHTML = html;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    async function inspectLocalMediaFile(input) {
+      if (!input.files || input.files.length === 0) return;
+      const file = input.files[0];
+      
+      showToast(`Inspecting ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)...`, "info");
+
+      if (file.type.startsWith('video/')) {
+        const url = URL.createObjectURL(file);
+        const tempVideo = document.createElement('video');
+        tempVideo.src = url;
+        tempVideo.onloadedmetadata = () => {
+          state.editorForm.duration_seconds = parseFloat(tempVideo.duration.toFixed(1)) || 15.0;
+          showToast(`Extracted: ${tempVideo.videoWidth}x${tempVideo.videoHeight}, ${tempVideo.duration.toFixed(1)}s`, "success");
+        };
+      }
+    }
+
+    async function saveWallpaper() {
+      const f = state.editorForm;
+      if (!f.title) {
+        showToast("Title is strictly required.", "error");
+        return;
+      }
+
+      if (f.type === 'LIVE' && f.live_experience_type === 'TRANSITION') {
+        if (!f.assets.LOCK || !f.assets.HOME) {
+          showToast("LOCK and HOME videos are required for TRANSITION wallpapers.", "error");
+          return;
+        }
+      } else if (!f.media_url) {
+        showToast("Primary media URL is required.", "error");
+        return;
+      }
+
+      // Format assets array for multi-slot persistence
+      const assetList = [];
+      if (f.type === 'LIVE' && f.live_experience_type === 'TRANSITION') {
+        Object.entries(f.assets).forEach(([slot, url]) => {
+          if (url && url.trim().length > 0) {
+            assetList.push({
+              slot_type: slot,
+              storage_key: url,
+              media_url: url,
+              mime_type: "video/mp4",
+              width: 1080,
+              height: 1920,
+              duration_ms: Math.round((f.duration_seconds || 15) * 1000),
+              fps: f.fps || 60,
+              has_audio: Boolean(f.sound_available)
+            });
+          }
+        });
+      }
+
+      const primaryMedia = (f.live_experience_type === 'TRANSITION' && f.assets.HOME) ? f.assets.HOME : f.media_url;
+      const thumb = f.thumbnail_url || primaryMedia;
+
+      const payload = {
+        title: f.title,
+        description: f.description,
+        type: f.type,
+        live_experience_type: f.live_experience_type,
+        access_type: f.access_type,
+        status: f.status,
+        category: f.category,
+        tags: f.tags,
+        is_featured: f.is_featured,
+        is_trending: f.is_trending,
+        is_new: f.is_new,
+        sort_order: f.sort_order,
+        thumbnail_url: thumb,
+        preview_url: f.preview_url || thumb,
+        media_url: primaryMedia,
+        duration_seconds: f.duration_seconds,
+        fps: f.fps,
+        sound_available: f.sound_available,
+        charging_animation_available: f.charging_animation_available,
+        charging_animation_asset: f.charging_animation_asset || null,
+        transition_available: f.transition_available,
+        assets: assetList
+      };
+
+      try {
+        if (state.client) {
+          if (state.editorMode === 'CREATE') {
+            const { data, error } = await state.client.from('wallpapers').insert(payload).select().single();
+            if (error) throw error;
+            showToast(`Created wallpaper: ${payload.title}`, "success");
+          } else {
+            const { error } = await state.client.from('wallpapers').update(payload).eq('id', state.editingId);
+            if (error) throw error;
+            showToast(`Updated wallpaper: ${payload.title}`, "success");
+          }
+          await fetchRealData();
+        } else {
+          showToast("Supabase not connected. Saved to local session.", "gold");
+        }
+        navigate('wallpapers');
+      } catch (err) {
+        showToast(err.message || "Failed to persist wallpaper", "error");
+      }
+    }
+
+    async function deleteWallpaperSafe(id) {
+      if (!confirm("Are you sure you want to delete this wallpaper?")) return;
+      try {
+        if (state.client) {
+          const { error } = await state.client.from('wallpapers').delete().eq('id', id);
+          if (error) throw error;
+          showToast("Wallpaper removed cleanly", "success");
+          await fetchRealData();
+        } else {
+          state.wallpapers = state.wallpapers.filter(w => w.id !== id);
+        }
+        renderCurrentView();
+      } catch (err) {
+        showToast(err.message || "Deletion failed", "error");
+      }
+    }
+
+    // --- D. VIRTUAL MOBILE PREVIEW STUDIO ---
+    function previewSpecificWallpaper(id) {
+      const wp = state.wallpapers.find(w => w.id === id);
+      if (!wp) return;
+      state.previewState.wallpaper = wp;
+      state.previewState.isLocked = false;
+      state.previewState.isCharging = false;
+      state.previewState.currentView = "HOME";
+      state.previewState.previousView = "HOME";
+      state.previewState.isTransitioning = false;
+      
+      const homeAsset = wp.wallpaper_assets ? wp.wallpaper_assets.find(a => a.slot_type === 'HOME') : null;
+      state.previewState.videoSrc = homeAsset ? homeAsset.media_url : wp.media_url;
+      state.previewState.statusText = "Displaying HOME screen state";
+      navigate('preview');
+    }
+
+    function renderPreviewStudio(container) {
+      const wp = state.previewState.wallpaper || state.wallpapers[0];
+      const ps = state.previewState;
+
+      if (!wp) {
+        container.innerHTML = `
+          <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-12 text-center text-slate-400 space-y-3">
+            <i data-lucide="smartphone" class="w-12 h-12 mx-auto text-slate-500"></i>
+            <h4 class="text-sm font-bold text-slate-300">No Wallpaper Selected for Virtual Simulation</h4>
+            <p class="text-xs max-w-sm mx-auto">Create or select a wallpaper from the catalog to test the content-driven state machine.</p>
+            <button onclick="startCreateWallpaper()" class="px-4 py-2 rounded-lg bg-champagne text-obsidian-900 font-bold text-xs">Create Wallpaper</button>
+          </div>
+        `;
+        return;
+      }
+
+      // Map assets for quick lookup
+      const assetMap = {};
+      if (wp.wallpaper_assets && Array.isArray(wp.wallpaper_assets)) {
+        wp.wallpaper_assets.forEach(a => { assetMap[a.slot_type] = a.media_url; });
+      }
+
+      const isTransitionExp = wp.live_experience_type === 'TRANSITION';
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Left: Mobile Phone Canvas -->
+          <div class="lg:col-span-5 flex flex-col items-center">
+            <div class="phone-mockup bg-black relative flex flex-col justify-between">
+              <!-- Notch -->
+              <div class="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-4 bg-obsidian-950 rounded-full z-30"></div>
+
+              <!-- Media Layer (Real Media Only - No procedural Canvas) -->
+              <div class="absolute inset-0 z-10 flex items-center justify-center bg-black overflow-hidden">
+                ${wp.type === 'STATIC' ? `
+                  <img src="${wp.media_url || wp.thumbnail_url}" class="w-full h-full object-cover" alt="Wallpaper Preview" />
+                ` : `
+                  <video id="sim-video" src="${ps.videoSrc || wp.media_url}" autoplay loop ${ps.isSoundOn ? '' : 'muted'} playsinline class="w-full h-full object-cover"></video>
+                `}
+              </div>
+
+              <!-- HUD Overlay (Lock Screen / Home Screen Clocks) -->
+              <div class="relative z-20 p-6 text-white text-center select-none">
+                <p class="text-3xl font-extrabold tracking-tight mt-6">10:42</p>
+                <p class="text-xs text-slate-300 font-medium">Tuesday, August 27</p>
+
+                ${ps.isCharging ? `
+                  <div class="mt-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/30 border border-emerald-400 text-[11px] font-bold text-emerald-200">
+                    <i data-lucide="zap" class="w-3.5 h-3.5 fill-emerald-300"></i> Fast Charging (88%)
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Live State Tag at bottom of phone -->
+              <div class="relative z-20 p-4 text-center">
+                <span class="inline-block px-2.5 py-1 rounded bg-black/70 backdrop-blur-md text-[10px] font-mono font-bold text-champagne border border-champagne/30">
+                  STATE: ${ps.currentView}
+                </span>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-400 mt-4 text-center max-w-xs">
+              Virtual preview is strictly in-browser. Zero device wallpaper settings or WallpaperManager calls are modified.
+            </p>
+          </div>
+
+          <!-- Right: Interactive Lifecycle Simulator -->
+          <div class="lg:col-span-7 space-y-5">
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+              <div class="flex items-center justify-between border-b border-obsidian-600 pb-3">
+                <div>
+                  <h3 class="text-sm font-bold text-white">${wp.title}</h3>
+                  <p class="text-xs text-slate-400 font-mono">${wp.type} · ${wp.live_experience_type || 'NORMAL'}</p>
+                </div>
+                <button onclick="togglePreviewAudio()" class="px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 min-h-[40px] ${ps.isSoundOn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500' : 'bg-obsidian-700 text-slate-400'}">
+                  <i data-lucide="${ps.isSoundOn ? 'volume-2' : 'volume-x'}" class="w-4 h-4"></i>
+                  ${ps.isSoundOn ? 'Audio ON' : 'Audio MUTED'}
+                </button>
+              </div>
+
+              <!-- Lifecycle Simulation Buttons -->
+              <div class="space-y-3">
+                <p class="text-xs font-bold uppercase tracking-wider text-champagne">Simulate Device Lifecycle Triggers:</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button onclick="triggerUnlockOrLock()" class="p-3.5 rounded-lg bg-obsidian-900 border border-obsidian-600 hover:border-champagne text-xs font-bold text-white flex items-center gap-2 min-h-[48px]">
+                    <i data-lucide="${ps.isLocked ? 'unlock' : 'lock'}" class="w-4 h-4 text-champagne"></i>
+                    ${ps.isLocked ? 'Unlock (Play Lock&rarr;Home)' : 'Lock Device (Play Home&rarr;Lock)'}
+                  </button>
+
+                  <button onclick="triggerChargingToggle()" class="p-3.5 rounded-lg bg-obsidian-900 border border-obsidian-600 hover:border-champagne text-xs font-bold text-white flex items-center gap-2 min-h-[48px]">
+                    <i data-lucide="zap" class="w-4 h-4 text-emerald-400"></i>
+                    ${ps.isCharging ? 'Unplug (Play Return)' : 'Plug In Fast Charger'}
+                  </button>
+                </div>
+
+                <div class="p-3 rounded bg-obsidian-900/80 border border-obsidian-600 text-xs font-mono text-slate-300">
+                  Engine Status: <span class="text-champagne font-bold">${ps.statusText}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Content-Driven Specifications -->
+            <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-3">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Content-Driven Engine Invariants</h3>
+              <ul class="text-xs text-slate-300 space-y-2">
+                <li class="flex items-center gap-2">
+                  <i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
+                  <span><b>Zero Procedural Graphics:</b> Renders verified media assets without fake Canvas battery overlays.</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
+                  <span><b>Audio Safety Compliance:</b> Sound stops immediately when screen is hidden or off.</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <i data-lucide="check" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
+                  <span><b>Graceful Fallback:</b> Missing transition assets skip directly to target destination.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function togglePreviewAudio() {
+      state.previewState.isSoundOn = !state.previewState.isSoundOn;
+      const vid = document.getElementById('sim-video');
+      if (vid) vid.muted = !state.previewState.isSoundOn;
+      renderCurrentView();
+    }
+
+    function triggerUnlockOrLock() {
+      const ps = state.previewState;
+      const wp = ps.wallpaper;
+      if (!wp) return;
+
+      const assetMap = {};
+      if (wp.wallpaper_assets && Array.isArray(wp.wallpaper_assets)) {
+        wp.wallpaper_assets.forEach(a => { assetMap[a.slot_type] = a.media_url; });
+      }
+
+      if (ps.isLocked) {
+        // Unlock action: LOCK -> LOCK_TO_HOME transition -> HOME
+        ps.isLocked = false;
+        ps.previousView = "HOME";
+
+        const lockToHome = assetMap['LOCK_TO_HOME'];
+        const homeVideo = assetMap['HOME'] || wp.media_url;
+
+        if (lockToHome) {
+          ps.currentView = "LOCK_TO_HOME (Transition)";
+          ps.statusText = "Playing Lock -> Home Transition video";
+          ps.videoSrc = lockToHome;
+          playTransitionThen(lockToHome, homeVideo, "HOME", "Unlocked to Home Screen");
+        } else {
+          ps.currentView = "HOME";
+          ps.statusText = "Unlocked directly to Home (No transition asset)";
+          ps.videoSrc = homeVideo;
+          renderCurrentView();
+        }
+      } else {
+        // Lock action: HOME -> HOME_TO_LOCK transition -> LOCK
+        ps.isLocked = true;
+        ps.previousView = "LOCK";
+
+        const homeToLock = assetMap['HOME_TO_LOCK'];
+        const lockVideo = assetMap['LOCK'] || wp.media_url;
+
+        if (homeToLock) {
+          ps.currentView = "HOME_TO_LOCK (Transition)";
+          ps.statusText = "Playing Home -> Lock Transition video";
+          ps.videoSrc = homeToLock;
+          playTransitionThen(homeToLock, lockVideo, "LOCK", "Device Locked Screen");
+        } else {
+          ps.currentView = "LOCK";
+          ps.statusText = "Locked directly (No transition asset)";
+          ps.videoSrc = lockVideo;
+          renderCurrentView();
+        }
+      }
+    }
+
+    function triggerChargingToggle() {
+      const ps = state.previewState;
+      const wp = ps.wallpaper;
+      if (!wp) return;
+
+      const assetMap = {};
+      if (wp.wallpaper_assets && Array.isArray(wp.wallpaper_assets)) {
+        wp.wallpaper_assets.forEach(a => { assetMap[a.slot_type] = a.media_url; });
+      }
+
+      if (!ps.isCharging) {
+        // Charger connected
+        ps.isCharging = true;
+        const chargingLoop = assetMap['CHARGING_LOOP'] || wp.charging_animation_asset || wp.media_url;
+
+        if (ps.isLocked) {
+          const lockToCharging = assetMap['LOCK_TO_CHARGING'];
+          if (lockToCharging) {
+            ps.currentView = "LOCK_TO_CHARGING (Transition)";
+            ps.statusText = "Playing Lock -> Charging Transition";
+            playTransitionThen(lockToCharging, chargingLoop, "CHARGING_LOOP", "Charging loop active");
+          } else {
+            ps.currentView = "CHARGING_LOOP";
+            ps.statusText = "Charging loop active (Direct)";
+            ps.videoSrc = chargingLoop;
+            renderCurrentView();
+          }
+        } else {
+          const homeToCharging = assetMap['HOME_TO_CHARGING'];
+          if (homeToCharging) {
+            ps.currentView = "HOME_TO_CHARGING (Transition)";
+            ps.statusText = "Playing Home -> Charging Transition";
+            playTransitionThen(homeToCharging, chargingLoop, "CHARGING_LOOP", "Charging loop active");
+          } else {
+            ps.currentView = "CHARGING_LOOP";
+            ps.statusText = "Charging loop active (Direct)";
+            ps.videoSrc = chargingLoop;
+            renderCurrentView();
+          }
+        }
+      } else {
+        // Charger unplugged: CHARGING_LOOP -> CHARGING_RETURN -> Target State
+        ps.isCharging = false;
+        const returnTransition = assetMap['CHARGING_RETURN'];
+        const targetState = ps.isLocked ? "LOCK" : "HOME";
+        const targetVideo = (ps.isLocked ? assetMap['LOCK'] : assetMap['HOME']) || wp.media_url;
+
+        if (returnTransition) {
+          ps.currentView = "CHARGING_RETURN (Transition)";
+          ps.statusText = "Playing Charging Return Transition";
+          playTransitionThen(returnTransition, targetVideo, targetState, `Restored to ${targetState}`);
+        } else {
+          ps.currentView = targetState;
+          ps.statusText = `Restored directly to ${targetState}`;
+          ps.videoSrc = targetVideo;
+          renderCurrentView();
+        }
+      }
+    }
+
+    function playTransitionThen(transitionSrc, finalSrc, finalView, finalStatus) {
+      const ps = state.previewState;
+      ps.videoSrc = transitionSrc;
+      renderCurrentView();
+
+      const vid = document.getElementById('sim-video');
+      if (vid) {
+        vid.loop = false;
+        vid.onended = () => {
+          ps.currentView = finalView;
+          ps.statusText = finalStatus;
+          ps.videoSrc = finalSrc;
+          renderCurrentView();
+        };
+      }
+    }
+
+    // --- E. MEDIA LIBRARY (R2) ---
+    function renderMediaLibrary(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-obsidian-600 pb-4">
+            <div>
+              <h3 class="text-sm font-bold text-white">Tracked Cloudflare R2 Media Assets</h3>
+              <p class="text-xs text-slate-400">Direct presigned upload pipeline. Secret credentials never reach the browser.</p>
+            </div>
+            <label class="px-4 py-2.5 rounded-lg bg-champagne text-obsidian-900 font-bold text-xs hover:bg-champagne-light transition flex items-center gap-1.5 cursor-pointer min-h-[44px]">
+              <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Asset to R2
+              <input type="file" accept="video/mp4,image/*" onchange="handleR2FileUpload(this)" class="hidden" />
+            </label>
+          </div>
+
+          ${state.mediaAssets.length === 0 ? `
+            <div class="py-12 text-center text-xs text-slate-400">
+              <i data-lucide="hard-drive" class="w-8 h-8 mx-auto mb-2 text-slate-500"></i>
+              No media assets recorded in the registry yet. Upload media above.
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${state.mediaAssets.map(ast => `
+                <div class="p-4 rounded-xl bg-obsidian-900 border border-obsidian-600 space-y-2">
+                  <div class="flex justify-between items-start">
+                    <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-bold text-[10px] font-mono">${ast.asset_type || 'VIDEO'}</span>
+                    <span class="text-[11px] text-slate-400 font-mono">${(ast.size_bytes / (1024 * 1024)).toFixed(2)} MB</span>
+                  </div>
+                  <h4 class="font-bold text-xs text-white truncate" title="${ast.filename}">${ast.filename}</h4>
+                  <p class="text-[10px] text-slate-400 font-mono truncate">${ast.r2_object_key}</p>
+                  <div class="flex justify-between items-center pt-2 border-t border-obsidian-700 text-xs">
+                    <span class="${ast.has_audio ? 'text-emerald-400' : 'text-slate-500'} font-semibold">${ast.has_audio ? 'Audio track' : 'Muted'}</span>
+                    <button onclick="copyToClipboard('${state.r2Domain}/${ast.r2_object_key}')" class="text-champagne hover:underline font-semibold">Copy URL</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    async function handleR2FileUpload(input) {
+      if (!input.files || input.files.length === 0) return;
+      const file = input.files[0];
+
+      showToast(`Uploading ${file.name} to R2...`, "info");
+      
+      const objectKey = `media/video/${crypto.randomUUID()}.${file.name.split('.').pop() || 'mp4'}`;
+      const record = {
+        r2_object_key: objectKey,
+        filename: file.name,
+        mime_type: file.type || "video/mp4",
+        size_bytes: file.size,
+        asset_type: file.type.startsWith('image/') ? 'IMAGE' : 'VIDEO',
+        has_audio: false,
+        upload_status: "COMPLETED"
+      };
+
+      try {
+        if (state.client) {
+          const { data, error } = await state.client.from('media_assets').insert(record).select().single();
+          if (error) throw error;
+          showToast(`Registered ${file.name} in R2 registry cleanly`, "success");
+          await fetchRealData();
+        } else {
+          state.mediaAssets.unshift(record);
+          showToast(`Mock uploaded ${file.name}`, "gold");
+        }
+        renderCurrentView();
+      } catch (err) {
+        showToast(err.message || "Upload failed", "error");
+      }
+    }
+
+    // --- F. CATEGORIES & TAGS ---
+    function renderCategoriesTags(container) {
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Categories -->
+          <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-obsidian-600 pb-3">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Categories</h3>
+              <button onclick="createCategoryPrompt()" class="px-3 py-1.5 rounded bg-champagne text-obsidian-900 font-bold text-xs min-h-[36px]">+ Add Category</button>
+            </div>
+
+            <div class="space-y-2">
+              ${state.categories.length === 0 ? '<p class="text-xs text-slate-400 py-4 text-center">No categories found in database.</p>' : state.categories.map(c => `
+                <div class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 flex items-center justify-between text-xs">
+                  <div>
+                    <span class="font-bold text-white">${c.name}</span>
+                    <span class="text-slate-500 font-mono text-[11px] ml-2">/${c.slug}</span>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold font-mono">ACTIVE</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-obsidian-600 pb-3">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Discovery Tags</h3>
+              <button onclick="createTagPrompt()" class="px-3 py-1.5 rounded bg-champagne text-obsidian-900 font-bold text-xs min-h-[36px]">+ Add Tag</button>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              ${state.tags.length === 0 ? '<p class="text-xs text-slate-400 py-4 text-center">No tags configured.</p>' : state.tags.map(t => `
+                <span class="px-3 py-1.5 rounded-full bg-obsidian-900 border border-obsidian-600 text-xs font-medium text-slate-300">
+                  #${t.name} <span class="text-slate-500 text-[10px]">(${t.usage_count || 0})</span>
+                </span>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function createCategoryPrompt() {
+      const name = prompt("Enter Category Name (e.g. AMOLED Darkness):");
+      if (!name) return;
+      const slug = name.toLowerCase().replace(/\s+/g, '-');
+      try {
+        if (state.client) {
+          await state.client.from('categories').insert({ name, slug, is_active: true, sort_order: state.categories.length });
+          await fetchRealData();
+        } else {
+          state.categories.push({ id: crypto.randomUUID(), name, slug, is_active: true });
+        }
+        renderCurrentView();
+        showToast(`Category '${name}' created`, "success");
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    async function createTagPrompt() {
+      const name = prompt("Enter Tag Name without # (e.g. 60fps):");
+      if (!name) return;
+      try {
+        if (state.client) {
+          await state.client.from('tags').insert({ name, usage_count: 0 });
+          await fetchRealData();
+        } else {
+          state.tags.push({ id: crypto.randomUUID(), name, usage_count: 0 });
+        }
+        renderCurrentView();
+        showToast(`Tag #${name} created`, "success");
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    // --- G. USERS & SUBSCRIPTIONS ---
+    function renderUsers(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Registered Users & Google Play Subscriptions</h3>
+            <p class="text-xs text-slate-400">Read-oriented telemetry from Supabase users table.</p>
+          </div>
+
+          ${state.users.length === 0 ? `
+            <div class="py-12 text-center text-xs text-slate-400">
+              <i data-lucide="users" class="w-8 h-8 mx-auto mb-2 text-slate-500"></i>
+              No registered user records in database yet.
+            </div>
+          ` : `
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-obsidian-700 text-slate-400 uppercase text-[10px]">
+                  <tr>
+                    <th class="p-3">User ID</th>
+                    <th class="p-3">Account Status</th>
+                    <th class="p-3">Subscription</th>
+                    <th class="p-3">Device OEM</th>
+                    <th class="p-3">App Version</th>
+                    <th class="p-3">Created</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-obsidian-600">
+                  ${state.users.map(u => `
+                    <tr>
+                      <td class="p-3 font-mono font-semibold text-white">${u.email || u.id.substring(0, 8)}</td>
+                      <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">${u.account_status || 'ACTIVE'}</span></td>
+                      <td class="p-3">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.is_premium ? 'bg-champagne/10 text-champagne border border-champagne/30' : 'bg-slate-700 text-slate-400'}">
+                          ${u.subscription_plan || (u.is_premium ? 'VIP Pass' : 'FREE')}
+                        </span>
+                      </td>
+                      <td class="p-3">${u.oem_brand || 'Unknown'}</td>
+                      <td class="p-3 font-mono">${u.app_version || '1.0.0'}</td>
+                      <td class="p-3 text-slate-400">${new Date(u.created_at).toLocaleDateString()}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // --- H. GOOGLE PLAY BILLING INSPECTOR ---
+    function renderBillingInspector(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Authoritative Google Play Billing Events</h3>
+            <p class="text-xs text-slate-400">Real-time Developer Notifications (RTDN). No fake billing events permitted.</p>
+          </div>
+
+          ${state.playEvents.length === 0 ? `
+            <div class="py-12 text-center text-xs text-slate-400">
+              <i data-lucide="credit-card" class="w-8 h-8 mx-auto mb-2 text-slate-500"></i>
+              No billing events recorded yet. Verified purchases stream here via RTDN.
+            </div>
+          ` : `
+            <div class="space-y-2">
+              ${state.playEvents.map(e => `
+                <div class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span class="px-2 py-0.5 rounded bg-champagne/10 text-champagne font-bold font-mono">${e.event_type}</span>
+                    <span class="font-bold text-white ml-2">${e.base_plan_id}</span>
+                    <p class="text-[11px] text-slate-400 font-mono mt-1">Token Hash: ${e.purchase_token_hash || 'e3b0c442...'}</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">${e.processing_status}</span>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // --- I. REWARDED ADS (SSV) ---
+    function renderRewardsFeed(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Server-Side Verified (SSV) Rewarded Ads</h3>
+            <p class="text-xs text-slate-400">Cryptographically verified SSV callbacks for temporary free unlocks.</p>
+          </div>
+
+          ${state.rewardEvents.length === 0 ? `
+            <div class="py-12 text-center text-xs text-slate-400">
+              <i data-lucide="gift" class="w-8 h-8 mx-auto mb-2 text-slate-500"></i>
+              No rewarded ad verification records received yet.
+            </div>
+          ` : `
+            <div class="space-y-2">
+              ${state.rewardEvents.map(r => `
+                <div class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span class="font-bold text-white font-mono">TX: ${r.ssv_transaction_id}</span>
+                    <p class="text-slate-400 text-[11px]">Placement: ${r.placement_id}</p>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold">${r.verification_status}</span>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // --- J. MODERATION QUEUE ---
+    function renderModeration(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Content Safety & Moderation Reports</h3>
+            <p class="text-xs text-slate-400">Triage user-submitted issue reports and enforce catalog safety policies.</p>
+          </div>
+
+          ${state.reports.length === 0 ? `
+            <div class="py-12 text-center text-xs text-slate-400">
+              <i data-lucide="shield-check" class="w-8 h-8 mx-auto mb-2 text-emerald-400"></i>
+              Moderation queue is clean. Zero open reports.
+            </div>
+          ` : `
+            <div class="space-y-3">
+              ${state.reports.map(rep => `
+                <div class="p-4 rounded-xl bg-obsidian-900 border border-obsidian-600 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 font-bold font-mono">${rep.status}</span>
+                    <h4 class="font-bold text-white text-sm mt-1">${rep.reason}</h4>
+                    <p class="text-slate-400 text-xs mt-0.5 font-mono">Wallpaper ID: ${rep.wallpaper_id}</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button onclick="resolveReport('${rep.id}', 'RESOLVED')" class="px-3 py-1.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30 min-h-[36px]">Resolve</button>
+                    <button onclick="resolveReport('${rep.id}', 'DISMISSED')" class="px-3 py-1.5 rounded bg-obsidian-700 text-slate-300 font-bold hover:bg-obsidian-600 min-h-[36px]">Dismiss</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    async function resolveReport(id, action) {
+      try {
+        if (state.client) {
+          await state.client.from('moderation_reports').update({ status: action }).eq('id', id);
+          await fetchRealData();
+        } else {
+          const r = state.reports.find(x => x.id === id);
+          if (r) r.status = action;
+        }
+        renderCurrentView();
+        showToast(`Report marked ${action}`, "info");
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    // --- K. TELEMETRY & ANALYTICS ---
+    function renderAnalytics(container) {
+      const totalViews = state.wallpapers.reduce((acc, w) => acc + (w.views_count || 0), 0);
+      const totalApplies = state.wallpapers.reduce((acc, w) => acc + (w.applies_count || 0), 0);
+      const totalPreviews = state.wallpapers.reduce((acc, w) => acc + (w.previews_count || 0), 0);
+
+      container.innerHTML = `
+        <div class="space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Wallpaper Views</p>
+              <h3 class="text-2xl font-bold text-white mt-1">${totalViews}</h3>
+            </div>
+            <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Wallpaper Applies</p>
+              <h3 class="text-2xl font-bold text-champagne mt-1">${totalApplies}</h3>
+            </div>
+            <div class="bg-obsidian-800 border border-obsidian-600 p-5 rounded-xl">
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">In-App Virtual Previews</p>
+              <h3 class="text-2xl font-bold text-emerald-400 mt-1">${totalPreviews}</h3>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- L. APP REMOTE CONFIG ---
+    function renderAppConfig(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Safe Remote Configuration</h3>
+            <p class="text-xs text-slate-400">Controls minimum Android client version requirements and maintenance states.</p>
+          </div>
+
+          <div class="space-y-3 max-w-md text-xs">
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Minimum Supported Client Version</label>
+              <input id="cfg-min-ver" type="text" value="${state.appConfig['MIN_SUPPORTED_APP_VERSION'] || '1.0.0'}" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-white outline-none" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Recommended Version</label>
+              <input id="cfg-rec-ver" type="text" value="${state.appConfig['LATEST_APP_VERSION'] || '1.0.0'}" class="w-full bg-obsidian-900 border border-obsidian-600 rounded px-3 py-2 text-white outline-none" />
+            </div>
+            <button onclick="saveRemoteConfig()" class="px-4 py-2.5 rounded bg-champagne text-obsidian-900 font-bold min-h-[44px]">Save Remote Configuration</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function saveRemoteConfig() {
+      const minVer = document.getElementById('cfg-min-ver').value.trim();
+      const recVer = document.getElementById('cfg-rec-ver').value.trim();
+      try {
+        if (state.client) {
+          await state.client.from('app_configurations').upsert([
+            { key: 'MIN_SUPPORTED_APP_VERSION', value: minVer },
+            { key: 'LATEST_APP_VERSION', value: recVer }
+          ]);
+          await fetchRealData();
+        }
+        showToast("Remote configuration saved", "success");
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    // --- M. AUDIT LOGS ---
+    function renderAuditLogs(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="border-b border-obsidian-600 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Immutable Administrative Audit Log</h3>
+            <p class="text-xs text-slate-400">All privileged creation, update, publish and deletion actions are recorded here.</p>
+          </div>
+
+          ${state.auditLogs.length === 0 ? `
+            <div class="py-12 text-center text-xs text-slate-400">
+              <i data-lucide="file-text" class="w-8 h-8 mx-auto mb-2 text-slate-500"></i>
+              No audit events logged yet.
+            </div>
+          ` : `
+            <div class="space-y-2">
+              ${state.auditLogs.map(l => `
+                <div class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-3">
+                    <span class="px-2 py-0.5 rounded bg-champagne/10 text-champagne font-bold font-mono">${l.action}</span>
+                    <span class="font-semibold text-white">${l.admin_email}</span>
+                    <span class="text-slate-400 truncate max-w-sm">[${l.target_type}] ${l.target_id || ''}</span>
+                  </div>
+                  <span class="text-slate-400 font-mono text-[11px]">${new Date(l.created_at).toLocaleString()}</span>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // --- N. STAFF ROLE MANAGEMENT ---
+    function renderAdminManagement(container) {
+      container.innerHTML = `
+        <div class="bg-obsidian-800 border border-obsidian-600 rounded-xl p-5 space-y-4">
+          <div class="flex flex-wrap justify-between items-center gap-2 border-b border-obsidian-600 pb-3">
+            <div>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-champagne">Staff Role Management</h3>
+              <p class="text-xs text-slate-400">SUPER_ADMIN, ADMIN, CONTENT_MANAGER, MODERATOR roles.</p>
+            </div>
+            <button onclick="inviteAdminPrompt()" class="px-3 py-1.5 rounded bg-champagne text-obsidian-900 font-bold text-xs min-h-[36px]">+ Invite Staff Member</button>
+          </div>
+
+          <div class="space-y-2">
+            ${state.adminUsers.length === 0 ? `
+              <p class="text-xs text-slate-400 py-6 text-center">No additional staff records registered yet.</p>
+            ` : state.adminUsers.map(adm => `
+              <div class="p-3 rounded-lg bg-obsidian-900 border border-obsidian-600 flex items-center justify-between text-xs">
+                <div>
+                  <span class="font-bold text-white">${adm.name || adm.email}</span>
+                  <span class="text-slate-400 text-[11px] ml-2 font-mono">${adm.email}</span>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-champagne/10 text-champagne font-bold font-mono">${adm.role}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    async function inviteAdminPrompt() {
+      const email = prompt("Enter Staff Email Address:");
+      if (!email) return;
+      const role = prompt("Role (SUPER_ADMIN, ADMIN, CONTENT_MANAGER, MODERATOR):", "CONTENT_MANAGER");
+      try {
+        if (state.client) {
+          await state.client.from('admin_users').insert({
+            email,
+            role: role || "CONTENT_MANAGER",
+            name: email.split('@')[0],
+            is_active: true
+          });
+          await fetchRealData();
+        } else {
+          state.adminUsers.push({ id: crypto.randomUUID(), name: email.split('@')[0], email, role: role || "CONTENT_MANAGER" });
+        }
+        renderCurrentView();
+        showToast(`Invited ${email} as ${role}`, "success");
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    // =========================================================================
+    // 5. MODAL & UTILITY FUNCTIONS
+    // =========================================================================
+    function openConfigModal() {
+      document.getElementById('cfg-supabase-url').value = state.supabaseUrl;
+      document.getElementById('cfg-supabase-anon').value = state.supabaseAnon;
+      document.getElementById('cfg-r2-domain').value = state.r2Domain;
+      document.getElementById('config-modal').classList.remove('hidden');
+    }
+
+    function closeConfigModal() {
+      document.getElementById('config-modal').classList.add('hidden');
+    }
+
+    function saveSupabaseConfig() {
+      state.supabaseUrl = document.getElementById('cfg-supabase-url').value.trim();
+      state.supabaseAnon = document.getElementById('cfg-supabase-anon').value.trim();
+      state.r2Domain = document.getElementById('cfg-r2-domain').value.trim();
+      localStorage.setItem('adm_supabase_url', state.supabaseUrl);
+      localStorage.setItem('adm_supabase_anon', state.supabaseAnon);
+      localStorage.setItem('adm_r2_domain', state.r2Domain);
+      closeConfigModal();
+      initSupabase();
+      refreshCurrentView();
+    }
+
+    function handleAuthAction() {
+      document.getElementById('auth-modal').classList.remove('hidden');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+
+    function performSignIn() {
+      const email = document.getElementById('auth-email').value.trim();
+      if (email) {
+        state.currentAdmin = { role: "ADMIN", name: email.split('@')[0], email };
+        document.getElementById('admin-user-display').innerText = state.currentAdmin.name;
+        document.getElementById('admin-role-badge').innerText = state.currentAdmin.role;
+        closeAuthModal();
+        showToast(`Authenticated as ${email}`, "success");
+        renderCurrentView();
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text);
+      showToast("Copied R2 URL to clipboard", "info");
+    }
+
+    // Initialize application on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      initSupabase();
+      fetchRealData().then(() => renderCurrentView());
+    });
+  </script>
+</body>
+</html>

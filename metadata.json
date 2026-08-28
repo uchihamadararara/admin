@@ -1,6 +1,6 @@
 {
-  "name": "Live Wallpaper Admin",
-  "description": "Production Live Wallpaper platform and mobile-first Admin Panel",
+  "name": "Wallpaper Admin",
+  "description": "Production Admin Panel for Live Wallpaper Platform managing Supabase, R2 media, charging experiences, subscriptions, and moderation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
