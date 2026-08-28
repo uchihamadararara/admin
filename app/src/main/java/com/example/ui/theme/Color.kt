@@ -69,3 +69,15 @@ val StatusPublished = GeoEmerald
 val StatusInactive = GeoGold
 val StatusArchived = Color(0xFF79747E)
 
+// Admin Console Palette Constants
+val CyanPrimary = Color(0xFF06B6D4)
+val DarkBg = Color(0xFF0B0F19)
+val DarkSurface = Color(0xFF161F30)
+val DarkCard = Color(0xFF1E293B)
+val BorderSubtle = Color(0xFF2A374A)
+val SkyAccent = Color(0xFF38BDF8)
+val StatusSuccess = Color(0xFF10B981)
+val StatusWarning = Color(0xFFF59E0B)
+val StatusDanger = Color(0xFFEF4444)
+val StatusPurple = Color(0xFFA855F7)
+
