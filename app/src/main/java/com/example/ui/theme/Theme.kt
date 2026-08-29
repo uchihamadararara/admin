@@ -45,3 +45,10 @@ fun RoyalAdminTheme(
     )
 }
 
+@Composable
+fun MyApplicationTheme(
+    content: @Composable () -> Unit
+) {
+    RoyalAdminTheme(content = content)
+}
+
