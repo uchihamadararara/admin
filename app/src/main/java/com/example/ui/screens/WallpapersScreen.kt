@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -360,7 +361,7 @@ private fun WallpaperAdminCard(
                 ) {
                     if (wallpaper.hasAudio) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = RoyalGoldText, modifier = Modifier.size(12.dp))
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = RoyalGoldText, modifier = Modifier.size(12.dp))
                             Text("Audio", fontSize = 10.sp, color = RoyalGoldText)
                         }
                     }

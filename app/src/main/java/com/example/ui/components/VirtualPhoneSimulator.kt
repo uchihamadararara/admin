@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -171,7 +172,7 @@ fun VirtualPhoneSimulator(
                     ) {
                         if (simulatorState.soundEnabled) {
                             Icon(
-                                imageVector = Icons.Default.VolumeUp,
+                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = null,
                                 tint = GeoPrimaryContainer,
                                 modifier = Modifier.size(12.dp)
@@ -402,15 +403,14 @@ fun VirtualPhoneSimulator(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = if (simulatorState.soundEnabled) GeoPrimary else TextSecondary
                 ),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(
-                        if (simulatorState.soundEnabled) GeoPrimary else GeoCardBorder
-                    )
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (simulatorState.soundEnabled) GeoPrimary else GeoCardBorder
                 ),
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Icon(
-                    imageVector = if (simulatorState.soundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                    imageVector = if (simulatorState.soundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp)
                 )
