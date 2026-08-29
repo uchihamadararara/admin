@@ -81,3 +81,19 @@ val StatusWarning = Color(0xFFF59E0B)
 val StatusDanger = Color(0xFFEF4444)
 val StatusPurple = Color(0xFFA855F7)
 
+// Legacy / Alternative Named Color Compatibility Aliases
+val ChampagneGold = RoyalGold
+val ChampagneGoldLight = RoyalGoldLight
+val ChampagneGoldSubtle = Color(0xFFD4AF37)
+val ObsidianCanvas = Color(0xFF0F172A)
+val StatusSuccessBgDark = Color(0xFF064E3B)
+val StatusSuccessDark = Color(0xFF10B981)
+val StatusWarningBgDark = Color(0xFF78350F)
+val StatusWarningDark = Color(0xFFF59E0B)
+val StatusDangerBgDark = Color(0xFF7F1D1D)
+val StatusDangerDark = Color(0xFFEF4444)
+val StatusInfoBgDark = Color(0xFF1E3A8A)
+val StatusInfoDark = Color(0xFF3B82F6)
+val RoleBadgeBg = Color(0xFF1E293B)
+val RoleBadgeBorder = Color(0xFF334155)
+

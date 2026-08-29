@@ -52,3 +52,10 @@ fun MyApplicationTheme(
     RoyalAdminTheme(content = content)
 }
 
+@Composable
+fun LiveWallpaperAdminTheme(
+    content: @Composable () -> Unit
+) {
+    RoyalAdminTheme(content = content)
+}
+
